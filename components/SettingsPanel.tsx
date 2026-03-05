@@ -34,7 +34,19 @@ export function SettingsPanel(p: Props) {
 }
 
 function Select({ label, value, onChange, options }: { label: string; value: string; onChange: (v: string) => void; options: string[] }) {
-  return <label className="block text-sm"><span className="mb-1 block">{label}</span><select value={value} onChange={(e) => onChange(e.target.value)} className="w-full rounded bg-black/35 p-2">{options.map((o) => <option key={o}>{o}</option>)}</select></label>;
+  return (
+    <label className="block text-sm">
+      <span className="mb-1 block">{label}</span>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="relative z-10 w-full rounded bg-black/35 p-2 pointer-events-auto"
+        onTouchStart={(event) => event.stopPropagation()}
+      >
+        {options.map((o) => <option key={o}>{o}</option>)}
+      </select>
+    </label>
+  );
 }
 
 function Toggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {

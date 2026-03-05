@@ -46,7 +46,7 @@ export function MobileDrawer({ open, title, onClose, children }: MobileDrawerPro
 
   return (
     <div className="fixed inset-0 z-[70] md:hidden" aria-modal="true" role="dialog" aria-label={title}>
-      <button className="absolute inset-0 bg-black/55" aria-label="Close settings" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/55" aria-hidden="true" onClick={onClose} />
       <div
         ref={sheetRef}
         className="absolute bottom-0 left-0 right-0 max-h-[78vh] w-full max-w-full rounded-t-3xl border-t border-white/15 bg-slate-950/95 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-2xl"
