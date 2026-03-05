@@ -203,16 +203,23 @@ export default function Home() {
   };
 
   return (
-    <main className={`mx-auto max-w-7xl p-4 ${theme === 'modern' ? 'modern-bg' : 'retro-font retro-scanlines'}`}>
+    <main
+  className={`mx-auto max-w-7xl p-4 pb-72 md:pb-4 ${
+    theme === 'modern' ? 'modern-bg' : 'retro-font retro-scanlines'
+  }`}
+>
       <h1 className="mb-4 text-3xl font-bold">Modern Snake</h1>
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
         <section>
           <HUD score={uiState.score} best={best} speed={uiState.speed} length={uiState.snake.length} />
-          <div className="relative mt-3 w-fit">
+          <div className="relative mt-3 w-fit touch-none select-none overscroll-none">
             <StartOverlay running={running} alive={uiState.alive} onStart={() => { setRunning(true); setPaused(false); }} />
             <canvas ref={canvasRef} width={config.width * TILE} height={config.height * TILE} className="rounded-2xl border border-white/20 bg-black/40" />
           </div>
-          <div className="mt-2 space-y-2"><KeyHints /><MobileControls onInput={input} visible={showDpad} /></div>
+          <div className="mt-2 space-y-2">
+  <KeyHints />
+</div>
+
         </section>
         <aside className="space-y-3 lg:sticky lg:top-4 lg:h-fit">
           <SettingsPanel theme={theme} difficulty={difficulty} wrapAround={wrapAround} practiceMode={practiceMode} showDpad={showDpad} paused={paused} onThemeChange={setTheme} onDifficultyChange={setDifficulty} onWrapChange={setWrapAround} onPracticeModeChange={setPracticeMode} onShowDpadChange={setShowDpad} onPauseToggle={() => setPaused((p) => !p)} onRestart={() => reset()} />
@@ -221,6 +228,10 @@ export default function Home() {
         </aside>
       </div>
       <Toast message={toast} />
+      <footer className="md:hidden sticky bottom-0 z-50 mt-4 border-t border-white/10 bg-slate-950/70 backdrop-blur p-3">
+  <div className="mb-2 text-center text-xs text-slate-300/80">Use arrows to move</div>
+  <MobileControls onInput={input} visible={showDpad} />
+</footer>
     </main>
   );
 }
