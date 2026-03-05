@@ -1,175 +1,139 @@
 import { SeededRng } from '@/lib/game/rng';
-import { Direction, GameConfig, GameState, Point, PowerUp, PowerUpType, ReplayLog } from '@/lib/game/types';
+import { Direction, GameConfig, GameState, Point, ReplayLog } from '@/lib/game/types';
 
-export const defaultConfig: GameConfig = {
-  width: 24,
-  height: 24,
-  initialSpeed: 8,
-  speedIncreaseEvery: 3,
-  maxSpeed: 18,
-  wrapAround: false,
-  powerUpChance: 0.08
-};
-
-const dirs: Record<Direction, Point> = {
+const vectors: Record<Direction, Point> = {
   up: { x: 0, y: -1 },
   down: { x: 0, y: 1 },
   left: { x: -1, y: 0 },
   right: { x: 1, y: 0 }
 };
 
-const isOpposite = (a: Direction, b: Direction) =>
+const opposite = (a: Direction, b: Direction) =>
   (a === 'up' && b === 'down') || (a === 'down' && b === 'up') || (a === 'left' && b === 'right') || (a === 'right' && b === 'left');
 
-export const createInitialState = (seed: number, config: GameConfig = defaultConfig): GameState => {
+export const createInitialState = (seed: number, config: GameConfig): GameState => {
+  const cx = Math.floor(config.width / 2);
+  const cy = Math.floor(config.height / 2);
   const rng = new SeededRng(seed);
-  const snake: Point[] = [
-    { x: Math.floor(config.width / 2), y: Math.floor(config.height / 2) },
-    { x: Math.floor(config.width / 2) - 1, y: Math.floor(config.height / 2) }
-  ];
-
   const state: GameState = {
-    snake,
+    snake: [{ x: cx, y: cy }, { x: cx - 1, y: cy }],
     direction: 'right',
-    pendingGrowth: 0,
     food: { x: 0, y: 0 },
-    powerUp: null,
-    effects: [],
+    pendingGrowth: 0,
     score: 0,
-    alive: true,
-    step: 0,
     speed: config.initialSpeed,
-    seed,
-    multiplier: 1
+    foodEaten: 0,
+    step: 0,
+    alive: true,
+    seed
   };
-
   state.food = spawnFreeCell(state, config, rng);
   state.seed = rng.getSeed();
   return state;
 };
 
-export const enqueueDirection = (queue: Direction[], state: GameState, direction: Direction) => {
-  const last = queue[queue.length - 1] ?? state.direction;
-  if (isOpposite(last, direction) || last === direction) return;
-  queue.push(direction);
+export const enqueueDirection = (queue: Direction[], state: GameState, next: Direction) => {
+  const current = queue.at(-1) ?? state.direction;
+  if (current === next || opposite(current, next)) return;
+  queue.push(next);
   if (queue.length > 3) queue.shift();
 };
 
-const pointEq = (a: Point, b: Point) => a.x === b.x && a.y === b.y;
+const eq = (a: Point, b: Point) => a.x === b.x && a.y === b.y;
 
 export const spawnFreeCell = (state: GameState, config: GameConfig, rng: SeededRng): Point => {
-  const occupied = new Set(state.snake.map((s) => `${s.x},${s.y}`));
-  if (state.powerUp) occupied.add(`${state.powerUp.position.x},${state.powerUp.position.y}`);
+  const occupied = new Set(state.snake.map((p) => `${p.x},${p.y}`));
   const free: Point[] = [];
-  for (let x = 0; x < config.width; x++) {
-    for (let y = 0; y < config.height; y++) {
+  for (let y = 0; y < config.height; y += 1) {
+    for (let x = 0; x < config.width; x += 1) {
       if (!occupied.has(`${x},${y}`)) free.push({ x, y });
     }
   }
   return free[rng.int(free.length)] ?? { x: 0, y: 0 };
 };
 
-const effectActive = (state: GameState, type: PowerUpType) => state.effects.some((e) => e.type === type && e.untilStep > state.step);
-
-const updateEffects = (state: GameState) => {
-  state.effects = state.effects.filter((e) => e.untilStep > state.step);
-  state.multiplier = effectActive(state, 'multiplier') ? 2 : 1;
-};
-
-const maybeSpawnPowerUp = (state: GameState, config: GameConfig, rng: SeededRng) => {
-  if (state.powerUp || rng.next() > config.powerUpChance) return;
-  const types: PowerUpType[] = ['slow', 'multiplier', 'ghost'];
-  state.powerUp = {
-    position: spawnFreeCell(state, config, rng),
-    type: types[rng.int(types.length)],
-    spawnedAtStep: state.step
-  };
-};
-
-const consumePowerUp = (state: GameState, powerUp: PowerUp) => {
-  const duration = 24;
-  state.effects.push({ type: powerUp.type, untilStep: state.step + duration });
-  state.powerUp = null;
-};
-
-export const stepGame = (state: GameState, config: GameConfig, inputQueue: Direction[], rng: SeededRng): GameState => {
-  if (!state.alive) return state;
-
-  if (inputQueue.length > 0) {
-    const next = inputQueue.shift();
-    if (next) state.direction = next;
-  }
+export const stepGame = (state: GameState, config: GameConfig, queue: Direction[], rng: SeededRng) => {
+  if (!state.alive) return;
+  const nextDir = queue.shift();
+  if (nextDir) state.direction = nextDir;
 
   state.step += 1;
-  updateEffects(state);
-
-  const delta = dirs[state.direction];
-  const head = state.snake[0];
-  let next: Point = { x: head.x + delta.x, y: head.y + delta.y };
+  const d = vectors[state.direction];
+  let next = { x: state.snake[0].x + d.x, y: state.snake[0].y + d.y };
 
   if (config.wrapAround) {
-    next = {
-      x: (next.x + config.width) % config.width,
-      y: (next.y + config.height) % config.height
-    };
-  }
-
-  if (!config.wrapAround && (next.x < 0 || next.y < 0 || next.x >= config.width || next.y >= config.height)) {
+    next = { x: (next.x + config.width) % config.width, y: (next.y + config.height) % config.height };
+  } else if (next.x < 0 || next.x >= config.width || next.y < 0 || next.y >= config.height) {
     state.alive = false;
-    return state;
+    return;
   }
 
-  const willGhost = effectActive(state, 'ghost');
   const body = state.pendingGrowth > 0 ? state.snake : state.snake.slice(0, -1);
-  if (!willGhost && body.some((s) => pointEq(s, next))) {
+  if (!config.practiceMode && body.some((b) => eq(b, next))) {
     state.alive = false;
-    return state;
+    return;
   }
 
   state.snake.unshift(next);
 
-  if (pointEq(next, state.food)) {
+  if (eq(next, state.food)) {
     state.pendingGrowth += 1;
-    state.score += 10 * state.multiplier;
-    state.food = spawnFreeCell(state, config, rng);
-    if (Math.floor(state.score / 10) % config.speedIncreaseEvery === 0) {
-      state.speed = Math.min(config.maxSpeed, state.speed + 0.6);
+    state.foodEaten += 1;
+    state.score += 10;
+    if (state.foodEaten % config.speedIncreaseEveryFood === 0) {
+      state.speed = Math.min(config.maxSpeed, state.speed + config.speedIncreaseAmount);
     }
-    maybeSpawnPowerUp(state, config, rng);
+    state.food = spawnFreeCell(state, config, rng);
   }
 
-  if (state.powerUp && pointEq(next, state.powerUp.position)) {
-    consumePowerUp(state, state.powerUp);
-  }
-
-  if (state.pendingGrowth > 0) {
-    state.pendingGrowth -= 1;
-  } else {
-    state.snake.pop();
-  }
-
-  if (state.powerUp && state.step - state.powerUp.spawnedAtStep > 40) {
-    state.powerUp = null;
-  }
+  if (state.pendingGrowth > 0) state.pendingGrowth -= 1;
+  else state.snake.pop();
 
   state.seed = rng.getSeed();
-  return state;
 };
 
-export const buildReplay = (seed: number, config: GameConfig, events: ReplayLog['events']): ReplayLog => ({
+export const buildReplay = (seed: number, config: GameConfig, events: ReplayLog['events'], finalStep: number): ReplayLog => ({
+  version: 1,
   seed,
   config,
-  events
+  events,
+  finalStep
 });
 
 export const simulateReplay = (replay: ReplayLog): GameState => {
   const state = createInitialState(replay.seed, replay.config);
-  const queue: Direction[] = [];
   const rng = new SeededRng(state.seed);
-  const maxStep = replay.events[replay.events.length - 1]?.step ?? 0;
-  for (let step = 0; step <= maxStep + 250 && state.alive; step++) {
-    replay.events.filter((ev) => ev.step === step).forEach((ev) => queue.push(ev.direction));
+  const queue: Direction[] = [];
+  const eventMap = new Map<number, Direction[]>();
+  replay.events.forEach((evt) => {
+    const arr = eventMap.get(evt.step) ?? [];
+    arr.push(evt.direction);
+    eventMap.set(evt.step, arr);
+  });
+  const max = replay.finalStep ?? Math.max(300, ...replay.events.map((e) => e.step + 20));
+  while (state.step < max && state.alive) {
+    eventMap.get(state.step)?.forEach((dir) => queue.push(dir));
     stepGame(state, replay.config, queue, rng);
   }
   return state;
+};
+
+export const buildReplayFrames = (replay: ReplayLog): GameState[] => {
+  const state = createInitialState(replay.seed, replay.config);
+  const rng = new SeededRng(state.seed);
+  const queue: Direction[] = [];
+  const frames: GameState[] = [{ ...state, snake: [...state.snake] }];
+  const eventMap = new Map<number, Direction[]>();
+  replay.events.forEach((e) => {
+    const arr = eventMap.get(e.step) ?? [];
+    arr.push(e.direction);
+    eventMap.set(e.step, arr);
+  });
+  const max = replay.finalStep ?? Math.max(300, ...replay.events.map((e) => e.step + 20));
+  while (state.step < max && state.alive) {
+    eventMap.get(state.step)?.forEach((dir) => queue.push(dir));
+    stepGame(state, replay.config, queue, rng);
+    frames.push({ ...state, snake: [...state.snake] });
+  }
+  return frames;
 };

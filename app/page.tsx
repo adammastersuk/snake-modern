@@ -2,251 +2,260 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { HUD } from '@/components/HUD';
+import { KeyHints } from '@/components/KeyHints';
+import { LeaderboardPanel } from '@/components/LeaderboardPanel';
 import { MobileControls } from '@/components/MobileControls';
-import { ReplayModal } from '@/components/ReplayModal';
+import { ReplayPanel } from '@/components/ReplayPanel';
 import { SettingsPanel } from '@/components/SettingsPanel';
-import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion';
+import { StartOverlay } from '@/components/StartOverlay';
+import { Toast } from '@/components/Toast';
+import { buildGameConfig } from '@/lib/game/difficulty';
+import { compressReplay, exportReplay, importReplay } from '@/lib/game/replay';
 import { createSeed, SeededRng } from '@/lib/game/rng';
-import { buildReplay, createInitialState, defaultConfig, enqueueDirection, stepGame } from '@/lib/game/simulation';
-import { exportReplay, importReplay } from '@/lib/game/replay';
-import { DebugStats, Direction, InputEvent, ReplayLog, ThemeMode } from '@/lib/game/types';
+import { buildReplay, buildReplayFrames, createInitialState, enqueueDirection, stepGame } from '@/lib/game/simulation';
+import { Difficulty, Direction, InputEvent, ScoreEntry, ThemeMode } from '@/lib/game/types';
 
-const TILE = 20;
+const TILE = 22;
 
-export default function HomePage() {
+export default function Home() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [theme, setTheme] = useState<ThemeMode>('modern');
+  const [difficulty, setDifficulty] = useState<Difficulty>('classic');
   const [wrapAround, setWrapAround] = useState(false);
-  const [paused, setPaused] = useState(false);
-  const [debugEnabled, setDebugEnabled] = useState(false);
-  const [replayMode, setReplayMode] = useState(false);
-  const [uiState, setUiState] = useState(() => createInitialState(createSeed(), { ...defaultConfig, wrapAround: false }));
+  const [practiceMode, setPracticeMode] = useState(false);
+  const [showDpad, setShowDpad] = useState(true);
+  const [paused, setPaused] = useState(true);
+  const [toast, setToast] = useState('');
+  const [running, setRunning] = useState(false);
   const [best, setBest] = useState(0);
-  const [debug, setDebug] = useState<DebugStats>({ fps: 0, simSteps: 0, seed: uiState.seed, snakeLength: uiState.snake.length });
-  const reducedMotion = usePrefersReducedMotion();
+  const [scores, setScores] = useState<ScoreEntry[]>([]);
+  const [replayFrames, setReplayFrames] = useState<ReturnType<typeof buildReplayFrames>>([]);
+  const [replayFrame, setReplayFrame] = useState(0);
 
+  const config = useMemo(() => buildGameConfig(difficulty, practiceMode, wrapAround), [difficulty, practiceMode, wrapAround]);
+  const [uiState, setUiState] = useState(() => createInitialState(createSeed(), config));
   const stateRef = useRef(uiState);
   const queueRef = useRef<Direction[]>([]);
   const rngRef = useRef(new SeededRng(uiState.seed));
   const eventsRef = useRef<InputEvent[]>([]);
-  const fpsCounter = useRef({ frames: 0, steps: 0, last: performance.now() });
-  const replayRef = useRef<ReplayLog | null>(null);
-  const replayExport = useMemo(() => exportReplay(buildReplay(uiState.seed, { ...defaultConfig, wrapAround }, eventsRef.current)), [uiState.seed, wrapAround, uiState.step]);
+
+  const replayLog = useMemo(() => buildReplay(uiState.seed, config, eventsRef.current, stateRef.current.step), [uiState.step, uiState.seed, config]);
+  const replayJson = useMemo(() => exportReplay(replayLog), [replayLog]);
+  const replayLink = useMemo(() => `?replay=${encodeURIComponent(compressReplay(replayLog))}`, [replayLog]);
 
   const reset = useCallback((seed = createSeed()) => {
-    const cfg = { ...defaultConfig, wrapAround };
-    const next = createInitialState(seed, cfg);
+    const next = createInitialState(seed, config);
     stateRef.current = next;
+    rngRef.current = new SeededRng(next.seed);
     queueRef.current = [];
     eventsRef.current = [];
-    replayRef.current = null;
-    rngRef.current = new SeededRng(next.seed);
-    setReplayMode(false);
-    setUiState({ ...next });
-  }, [wrapAround]);
+    setPaused(true);
+    setRunning(false);
+    setUiState({ ...next, snake: [...next.snake] });
+    setReplayFrames([]);
+    setReplayFrame(0);
+  }, [config]);
+
+  useEffect(() => reset(), [config, reset]);
+
+  useEffect(() => {
+    const incoming = new URLSearchParams(window.location.search).get('replay');
+    if (incoming) {
+      try {
+        const replay = importReplay(incoming);
+        const frames = buildReplayFrames(replay);
+        setReplayFrames(frames);
+        setReplayFrame(0);
+        setPaused(true);
+        setRunning(false);
+        setToast('Loaded replay from link');
+      } catch {
+        setToast('Unable to load replay link');
+      }
+    }
+  }, []);
 
   useEffect(() => {
     const saved = Number(localStorage.getItem('snake-best') ?? '0');
     setBest(saved);
+    fetch('/api/scores').then((r) => r.json()).then((d) => setScores(d.scores ?? [])).catch(() => undefined);
   }, []);
 
-  const handleInput = useCallback((dir: Direction) => {
-    if (replayMode) return;
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(''), 1600);
+    return () => clearTimeout(t);
+  }, [toast]);
+
+  const input = useCallback((dir: Direction) => {
     enqueueDirection(queueRef.current, stateRef.current, dir);
     eventsRef.current.push({ step: stateRef.current.step, direction: dir });
-  }, [replayMode]);
+  }, []);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const map: Record<string, Direction> = {
-        ArrowUp: 'up',
-        ArrowDown: 'down',
-        ArrowLeft: 'left',
-        ArrowRight: 'right',
-        w: 'up',
-        a: 'left',
-        s: 'down',
-        d: 'right'
-      };
+      const map: Record<string, Direction> = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right', w: 'up', a: 'left', s: 'down', d: 'right' };
       const dir = map[e.key];
       if (dir) {
         e.preventDefault();
-        handleInput(dir);
+        input(dir);
       }
-      if (e.key === ' ') setPaused((p) => !p);
+      if (e.key === ' ') {
+        e.preventDefault();
+        setRunning(true);
+        setPaused((p) => !p);
+      }
       if (e.key.toLowerCase() === 'r') reset();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [handleInput, reset]);
+  }, [input, reset]);
+
+  useEffect(() => {
+    const target = canvasRef.current;
+    if (!target) return;
+    let startX = 0;
+    let startY = 0;
+    const touchStart = (e: TouchEvent) => {
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+    };
+    const touchEnd = (e: TouchEvent) => {
+      const dx = e.changedTouches[0].clientX - startX;
+      const dy = e.changedTouches[0].clientY - startY;
+      if (Math.abs(dx) > Math.abs(dy)) input(dx > 0 ? 'right' : 'left');
+      else input(dy > 0 ? 'down' : 'up');
+    };
+    target.addEventListener('touchstart', touchStart, { passive: true });
+    target.addEventListener('touchend', touchEnd, { passive: true });
+    return () => {
+      target.removeEventListener('touchstart', touchStart);
+      target.removeEventListener('touchend', touchEnd);
+    };
+  }, [input]);
 
   useEffect(() => {
     let raf = 0;
     let last = performance.now();
     let accumulator = 0;
 
-    const frame = (ts: number) => {
-      const elapsed = Math.min(100, ts - last);
+    const tick = (ts: number) => {
+      const dt = Math.min(100, ts - last);
       last = ts;
-      accumulator += elapsed;
-      const state = stateRef.current;
-      const cfg = { ...defaultConfig, wrapAround };
-      const tickMs = 1000 / (state.speed * (state.effects.some((e) => e.type === 'slow') ? 0.6 : 1));
+      accumulator += dt;
+      const frameMs = 1000 / stateRef.current.speed;
 
-      while (accumulator >= tickMs) {
-        if (!paused) {
-          if (replayRef.current) {
-            replayRef.current.events.filter((ev) => ev.step === state.step).forEach((ev) => queueRef.current.push(ev.direction));
+      while (accumulator >= frameMs) {
+        if (!paused && running && replayFrames.length === 0) {
+          stepGame(stateRef.current, config, queueRef.current, rngRef.current);
+          if (!stateRef.current.alive) {
+            setPaused(true);
+            setRunning(false);
           }
-          stepGame(state, cfg, queueRef.current, rngRef.current);
-          fpsCounter.current.steps += 1;
         }
-        accumulator -= tickMs;
+        accumulator -= frameMs;
       }
 
-      draw(canvasRef.current, state, theme, reducedMotion);
-
-      fpsCounter.current.frames += 1;
-      if (ts - fpsCounter.current.last > 1000) {
-        setDebug({
-          fps: fpsCounter.current.frames,
-          simSteps: fpsCounter.current.steps,
-          seed: state.seed,
-          snakeLength: state.snake.length
-        });
-        fpsCounter.current = { frames: 0, steps: 0, last: ts };
-        setUiState({ ...state, snake: [...state.snake], effects: [...state.effects] });
-
-        if (!state.alive && state.score > best) {
-          setBest(state.score);
-          localStorage.setItem('snake-best', String(state.score));
-        }
+      if (replayFrames.length > 0) {
+        const frame = replayFrames[replayFrame] ?? replayFrames.at(-1);
+        if (frame) draw(canvasRef.current, frame, theme);
+      } else {
+        draw(canvasRef.current, stateRef.current, theme);
       }
 
-      raf = requestAnimationFrame(frame);
+      setUiState({ ...stateRef.current, snake: [...stateRef.current.snake] });
+      raf = requestAnimationFrame(tick);
     };
 
-    raf = requestAnimationFrame(frame);
+    raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [theme, paused, wrapAround, reducedMotion, best]);
+  }, [config, paused, running, replayFrames, replayFrame, theme]);
 
-  const onImportReplay = (json: string) => {
-    const replay = importReplay(json);
-    replayRef.current = replay;
-    const initial = createInitialState(replay.seed, replay.config);
-    stateRef.current = initial;
-    rngRef.current = new SeededRng(initial.seed);
-    queueRef.current = [];
-    setReplayMode(true);
-    setPaused(false);
+  useEffect(() => {
+    if (!uiState.alive && uiState.score > best) {
+      setBest(uiState.score);
+      localStorage.setItem('snake-best', String(uiState.score));
+    }
+  }, [uiState.alive, uiState.score, best]);
+
+  const loadReplay = (raw: string) => {
+    try {
+      const replay = importReplay(raw);
+      const frames = buildReplayFrames(replay);
+      setReplayFrames(frames);
+      setReplayFrame(0);
+      setPaused(true);
+      setRunning(false);
+      setToast('Replay loaded');
+    } catch {
+      setToast('Invalid replay');
+    }
+  };
+
+  const submitScore = async () => {
+    if (uiState.alive || uiState.score <= 0) return setToast('Finish a run first');
+    const payload = { score: uiState.score, length: uiState.snake.length, difficulty, mode: theme, wrapAround, practiceMode, replay: replayLog };
+    const res = await fetch('/api/scores', { method: 'POST', body: JSON.stringify(payload) });
+    if (!res.ok) return setToast('Score submit failed');
+    const list = await fetch('/api/scores').then((r) => r.json());
+    setScores(list.scores ?? []);
+    setToast('Score submitted');
   };
 
   return (
-    <main className={`mx-auto max-w-6xl p-4 ${theme === 'retro' ? 'retro-scanlines' : ''}`}>
-      <h1 className="mb-4 text-3xl font-bold">Snake: Modern / Retro</h1>
-      <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
+    <main className={`mx-auto max-w-7xl p-4 ${theme === 'modern' ? 'modern-bg' : 'retro-font retro-scanlines'}`}>
+      <h1 className="mb-4 text-3xl font-bold">Modern Snake</h1>
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
         <section>
-          <HUD score={uiState.score} best={best} speed={uiState.speed} length={uiState.snake.length} replayMode={replayMode} />
-          <canvas
-            ref={canvasRef}
-            width={defaultConfig.width * TILE}
-            height={defaultConfig.height * TILE}
-            className="mt-4 w-full max-w-[560px] rounded-xl border border-white/20 bg-black/40"
-            aria-label="Snake game board"
-          />
-          <div className="mt-3 flex items-center gap-3">
-            <MobileControls onInput={handleInput} />
+          <HUD score={uiState.score} best={best} speed={uiState.speed} length={uiState.snake.length} />
+          <div className="relative mt-3 w-fit">
+            <StartOverlay running={running} alive={uiState.alive} onStart={() => { setRunning(true); setPaused(false); }} />
+            <canvas ref={canvasRef} width={config.width * TILE} height={config.height * TILE} className="rounded-2xl border border-white/20 bg-black/40" />
           </div>
-          {debugEnabled && (
-            <div className="mt-3 rounded-lg bg-black/40 p-2 text-xs">
-              FPS: {debug.fps} | Steps/s: {debug.simSteps} | Length: {debug.snakeLength} | Seed: {debug.seed}
-            </div>
-          )}
+          <div className="mt-2 space-y-2"><KeyHints /><MobileControls onInput={input} visible={showDpad} /></div>
         </section>
-        <div className="space-y-4">
-          <SettingsPanel
-            theme={theme}
-            wrapAround={wrapAround}
-            paused={paused}
-            reducedMotion={reducedMotion}
-            debug={debugEnabled}
-            onThemeChange={setTheme}
-            onWrapChange={setWrapAround}
-            onPauseToggle={() => setPaused((p) => !p)}
-            onRestart={() => reset()}
-            onDebugToggle={() => setDebugEnabled((v) => !v)}
-          />
-          <ReplayModal replayJson={replayExport} onImport={onImportReplay} />
-        </div>
+        <aside className="space-y-3 lg:sticky lg:top-4 lg:h-fit">
+          <SettingsPanel theme={theme} difficulty={difficulty} wrapAround={wrapAround} practiceMode={practiceMode} showDpad={showDpad} paused={paused} onThemeChange={setTheme} onDifficultyChange={setDifficulty} onWrapChange={setWrapAround} onPracticeModeChange={setPracticeMode} onShowDpadChange={setShowDpad} onPauseToggle={() => setPaused((p) => !p)} onRestart={() => reset()} />
+          <ReplayPanel replayJson={replayJson} replayLink={replayLink} replayFrame={replayFrame} replayFrameMax={Math.max(0, replayFrames.length - 1)} onImport={loadReplay} onFrameChange={setReplayFrame} />
+          <LeaderboardPanel scores={scores} onWatchReplay={loadReplay} onSubmitScore={submitScore} />
+        </aside>
       </div>
+      <Toast message={toast} />
     </main>
   );
 }
 
-function draw(canvas: HTMLCanvasElement | null, state: ReturnType<typeof createInitialState>, theme: ThemeMode, reducedMotion: boolean) {
+function draw(canvas: HTMLCanvasElement | null, state: ReturnType<typeof createInitialState>, theme: ThemeMode) {
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
 
-  const width = canvas.width;
-  const height = canvas.height;
-  ctx.clearRect(0, 0, width, height);
-
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
   if (theme === 'modern') {
-    const grad = ctx.createLinearGradient(0, 0, width, height);
-    grad.addColorStop(0, '#0a1026');
-    grad.addColorStop(1, '#1f2a4d');
-    ctx.fillStyle = grad;
+    const g = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+    g.addColorStop(0, '#020617');
+    g.addColorStop(1, '#1e293b');
+    ctx.fillStyle = g;
   } else {
-    ctx.fillStyle = '#0d0f10';
+    ctx.fillStyle = '#101314';
   }
-  ctx.fillRect(0, 0, width, height);
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
 
   if (theme === 'retro') {
-    ctx.strokeStyle = 'rgba(127, 255, 80, 0.08)';
-    for (let x = 0; x < width; x += TILE) {
-      ctx.beginPath();
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, height);
-      ctx.stroke();
-    }
-    for (let y = 0; y < height; y += TILE) {
-      ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(width, y);
-      ctx.stroke();
-    }
+    ctx.strokeStyle = 'rgba(138,255,113,.08)';
+    for (let x = 0; x <= canvas.width; x += TILE) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke(); }
+    for (let y = 0; y <= canvas.height; y += TILE) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke(); }
   }
 
-  const alphaTrail = reducedMotion ? 1 : 0.6;
-  state.snake.forEach((s, i) => {
-    ctx.fillStyle = theme === 'modern' ? `rgba(56, 189, 248, ${Math.max(0.35, 1 - i * 0.04)})` : '#7cff6f';
-    if (theme === 'modern' && !reducedMotion) {
-      ctx.shadowBlur = 12;
-      ctx.shadowColor = '#38bdf8';
-      ctx.globalAlpha = alphaTrail;
-    }
-    ctx.fillRect(s.x * TILE + 2, s.y * TILE + 2, TILE - 4, TILE - 4);
-    ctx.globalAlpha = 1;
+  state.snake.forEach((part, i) => {
+    ctx.fillStyle = theme === 'modern' ? `rgba(56,189,248,${Math.max(0.3, 1 - i * 0.03)})` : '#8af27a';
+    if (theme === 'modern') { ctx.shadowColor = '#22d3ee'; ctx.shadowBlur = 10; }
+    ctx.fillRect(part.x * TILE + 2, part.y * TILE + 2, TILE - 4, TILE - 4);
     ctx.shadowBlur = 0;
   });
 
-  ctx.fillStyle = theme === 'modern' ? '#f97316' : '#ffd166';
+  ctx.fillStyle = theme === 'modern' ? '#fb923c' : '#facc15';
   ctx.beginPath();
-  ctx.arc(state.food.x * TILE + TILE / 2, state.food.y * TILE + TILE / 2, TILE / 2.8, 0, Math.PI * 2);
+  ctx.arc(state.food.x * TILE + TILE / 2, state.food.y * TILE + TILE / 2, TILE * 0.32, 0, Math.PI * 2);
   ctx.fill();
-
-  if (state.powerUp) {
-    const map = { slow: '#22d3ee', multiplier: '#a855f7', ghost: '#f43f5e' };
-    ctx.fillStyle = map[state.powerUp.type];
-    ctx.fillRect(state.powerUp.position.x * TILE + 4, state.powerUp.position.y * TILE + 4, TILE - 8, TILE - 8);
-  }
-
-  if (!state.alive) {
-    ctx.fillStyle = 'rgba(0,0,0,0.65)';
-    ctx.fillRect(0, 0, width, height);
-    ctx.fillStyle = '#fff';
-    ctx.font = 'bold 28px sans-serif';
-    ctx.fillText('Game Over', width / 2 - 80, height / 2);
-  }
 }

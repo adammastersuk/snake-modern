@@ -1,42 +1,43 @@
 import { Difficulty, GameConfig } from '@/lib/game/types';
 
-export const difficultyPresets: Record<Difficulty, Pick<GameConfig, 'initialSpeed' | 'speedIncreaseEvery' | 'speedIncreaseAmount' | 'maxSpeed' | 'powerUpChance' | 'wrapAround'>> = {
+const base: Pick<GameConfig, 'width' | 'height'> = { width: 24, height: 24 };
+
+export const difficultyPresets: Record<Difficulty, Omit<GameConfig, 'practiceMode'>> = {
   casual: {
+    ...base,
+    wrapAround: true,
     initialSpeed: 6,
-    speedIncreaseEvery: 4,
-    speedIncreaseAmount: 0.4,
-    maxSpeed: 11,
-    powerUpChance: 0.12,
-    wrapAround: true
+    speedIncreaseEveryFood: 4,
+    speedIncreaseAmount: 0.35,
+    maxSpeed: 11
   },
   classic: {
+    ...base,
+    wrapAround: false,
     initialSpeed: 8,
-    speedIncreaseEvery: 3,
-    speedIncreaseAmount: 0.6,
-    maxSpeed: 18,
-    powerUpChance: 0.08,
-    wrapAround: false
+    speedIncreaseEveryFood: 3,
+    speedIncreaseAmount: 0.55,
+    maxSpeed: 16
   },
   hardcore: {
+    ...base,
+    wrapAround: false,
     initialSpeed: 11,
-    speedIncreaseEvery: 2,
-    speedIncreaseAmount: 0.85,
-    maxSpeed: 24,
-    powerUpChance: 0.05,
-    wrapAround: false
+    speedIncreaseEveryFood: 2,
+    speedIncreaseAmount: 0.75,
+    maxSpeed: 22
   }
 };
 
-export const buildConfigForDifficulty = (difficulty: Difficulty, practiceMode: boolean): Partial<GameConfig> => {
+export const buildGameConfig = (difficulty: Difficulty, practiceMode: boolean, wrapOverride?: boolean): GameConfig => {
   const preset = difficultyPresets[difficulty];
-  if (!practiceMode) return { ...preset, practiceMode: false };
-
   return {
     ...preset,
-    initialSpeed: Math.min(preset.initialSpeed, 6),
-    speedIncreaseEvery: 9999,
-    speedIncreaseAmount: 0,
-    maxSpeed: Math.min(8, preset.maxSpeed),
-    practiceMode: true
+    wrapAround: wrapOverride ?? preset.wrapAround,
+    practiceMode,
+    initialSpeed: practiceMode ? Math.min(6, preset.initialSpeed) : preset.initialSpeed,
+    speedIncreaseAmount: practiceMode ? 0.2 : preset.speedIncreaseAmount,
+    speedIncreaseEveryFood: practiceMode ? 6 : preset.speedIncreaseEveryFood,
+    maxSpeed: practiceMode ? Math.min(10, preset.maxSpeed) : preset.maxSpeed
   };
 };

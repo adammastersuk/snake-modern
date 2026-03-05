@@ -1,24 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { allowRequest, getScores, isGlobalLeaderboardEnabled, saveScore, validateSubmission } from '@/lib/leaderboard';
+import { getScores, saveScore } from '@/lib/leaderboard';
 
-export async function GET(request: NextRequest) {
-  const limit = Math.min(25, Number(request.nextUrl.searchParams.get('limit') ?? '10'));
-  const scores = await getScores(limit);
-  return NextResponse.json({ enabled: isGlobalLeaderboardEnabled(), scores });
+export async function GET() {
+  const scores = await getScores(20);
+  return NextResponse.json({ scores });
 }
 
-export async function POST(request: NextRequest) {
-  const ip = request.headers.get('x-forwarded-for') ?? 'local';
-  if (!allowRequest(ip)) {
-    return NextResponse.json({ error: 'Rate limited' }, { status: 429 });
-  }
-
+export async function POST(req: NextRequest) {
   try {
-    const body = await request.json();
-    const submission = validateSubmission(body);
-    await saveScore(submission);
+    const payload = await req.json();
+    await saveScore(payload);
     return NextResponse.json({ ok: true });
   } catch (error) {
-    return NextResponse.json({ error: (error as Error).message }, { status: 400 });
+    return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : 'Invalid payload' }, { status: 400 });
   }
 }

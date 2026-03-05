@@ -1,19 +1,34 @@
 export type Direction = 'up' | 'down' | 'left' | 'right';
 export type ThemeMode = 'modern' | 'retro';
+export type Difficulty = 'casual' | 'classic' | 'hardcore';
 
-export type Point = { x: number; y: number };
-
-export type PowerUpType = 'slow' | 'multiplier' | 'ghost';
-
-export interface PowerUp {
-  position: Point;
-  type: PowerUpType;
-  spawnedAtStep: number;
+export interface Point {
+  x: number;
+  y: number;
 }
 
-export interface ActiveEffect {
-  type: PowerUpType;
-  untilStep: number;
+export interface GameConfig {
+  width: number;
+  height: number;
+  wrapAround: boolean;
+  practiceMode: boolean;
+  initialSpeed: number;
+  speedIncreaseEveryFood: number;
+  speedIncreaseAmount: number;
+  maxSpeed: number;
+}
+
+export interface GameState {
+  snake: Point[];
+  direction: Direction;
+  food: Point;
+  pendingGrowth: number;
+  score: number;
+  speed: number;
+  foodEaten: number;
+  step: number;
+  alive: boolean;
+  seed: number;
 }
 
 export interface InputEvent {
@@ -22,39 +37,22 @@ export interface InputEvent {
 }
 
 export interface ReplayLog {
+  version: 1;
   seed: number;
   config: GameConfig;
   events: InputEvent[];
+  finalStep?: number;
 }
 
-export interface GameConfig {
-  width: number;
-  height: number;
-  initialSpeed: number;
-  speedIncreaseEvery: number;
-  maxSpeed: number;
-  wrapAround: boolean;
-  powerUpChance: number;
-}
-
-export interface GameState {
-  snake: Point[];
-  direction: Direction;
-  pendingGrowth: number;
-  food: Point;
-  powerUp: PowerUp | null;
-  effects: ActiveEffect[];
+export interface ScoreEntry {
+  id?: number;
+  name?: string;
   score: number;
-  alive: boolean;
-  step: number;
-  speed: number;
-  seed: number;
-  multiplier: number;
-}
-
-export interface DebugStats {
-  fps: number;
-  simSteps: number;
-  seed: number;
-  snakeLength: number;
+  length: number;
+  difficulty: Difficulty;
+  mode: ThemeMode;
+  wrapAround: boolean;
+  practiceMode: boolean;
+  replay: ReplayLog;
+  created_at: string;
 }

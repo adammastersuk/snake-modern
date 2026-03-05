@@ -1,24 +1,23 @@
 export class SeededRng {
-  private state: number;
+  private seed: number;
 
   constructor(seed: number) {
-    this.state = seed >>> 0;
+    this.seed = seed >>> 0;
   }
 
-  next(): number {
-    this.state ^= this.state << 13;
-    this.state ^= this.state >>> 17;
-    this.state ^= this.state << 5;
-    return (this.state >>> 0) / 4294967296;
+  next() {
+    this.seed = (1664525 * this.seed + 1013904223) >>> 0;
+    return this.seed / 0xffffffff;
   }
 
-  int(maxExclusive: number): number {
+  int(maxExclusive: number) {
+    if (maxExclusive <= 0) return 0;
     return Math.floor(this.next() * maxExclusive);
   }
 
-  getSeed(): number {
-    return this.state >>> 0;
+  getSeed() {
+    return this.seed >>> 0;
   }
 }
 
-export const createSeed = () => (Date.now() ^ Math.floor(Math.random() * 0xffffffff)) >>> 0;
+export const createSeed = () => Math.floor(Math.random() * 0xffffffff) >>> 0;

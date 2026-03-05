@@ -1,16 +1,17 @@
-'use client';
+interface StartOverlayProps {
+  running: boolean;
+  alive: boolean;
+  onStart: () => void;
+}
 
-import { Difficulty } from '@/lib/game/types';
-
-export function StartOverlay({ countdown, started, difficulty, onStart }: { countdown: number | null; started: boolean; difficulty: Difficulty; onStart: () => void }) {
-  if (started && countdown === null) return null;
+export function StartOverlay({ running, alive, onStart }: StartOverlayProps) {
+  if (running && alive) return null;
   return (
     <div className="absolute inset-0 z-10 grid place-items-center rounded-2xl bg-black/55 text-center">
       <div>
-        <p className="text-sm text-white/80">Difficulty: {difficulty}</p>
-        {countdown !== null ? <p className="text-7xl font-black">{countdown}</p> : <p className="text-3xl font-bold">Press Space / Tap to Start</p>}
-        <p className="mt-2 text-xs text-white/70">Arrows/WASD move · Space pause · R restart</p>
-        {!started && <button onClick={onStart} className="mt-3 rounded bg-cyan-500 px-4 py-2">Start</button>}
+        <p className="text-3xl font-bold">{alive ? 'Ready?' : 'Game Over'}</p>
+        <p className="mt-2 text-sm text-white/80">Press Space or tap Start</p>
+        <button onClick={onStart} className="mt-4 rounded bg-cyan-500 px-4 py-2 font-semibold">Start</button>
       </div>
     </div>
   );
