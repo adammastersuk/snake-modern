@@ -46,21 +46,27 @@ export function MobileDrawer({ open, title, onClose, children }: MobileDrawerPro
 
   return (
     <div className="fixed inset-0 z-[70] md:hidden" aria-modal="true" role="dialog" aria-label={title}>
-      <button className="absolute inset-0 bg-black/55" aria-label="Close panels" onClick={onClose} />
+      <button className="absolute inset-0 bg-black/55" aria-label="Close settings" onClick={onClose} />
       <div
         ref={sheetRef}
         className="absolute bottom-0 left-0 right-0 max-h-[78vh] w-full max-w-full rounded-t-3xl border-t border-white/15 bg-slate-950/95 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-2xl"
-        onTouchStart={(e) => {
-          startYRef.current = e.changedTouches[0].clientY;
-        }}
-        onTouchEnd={(e) => {
-          if (startYRef.current === null) return;
-          const delta = e.changedTouches[0].clientY - startYRef.current;
-          if (delta > 70) onClose();
-          startYRef.current = null;
-        }}
       >
-        <div className="mx-auto mb-3 h-1.5 w-12 rounded-full bg-white/30" aria-hidden="true" />
+        <button
+          type="button"
+          className="mx-auto mb-3 block h-3 w-20 rounded-full bg-transparent"
+          aria-label="Swipe down to close settings"
+          onTouchStart={(e) => {
+            startYRef.current = e.changedTouches[0].clientY;
+          }}
+          onTouchEnd={(e) => {
+            if (startYRef.current === null) return;
+            const delta = e.changedTouches[0].clientY - startYRef.current;
+            if (delta > 60) onClose();
+            startYRef.current = null;
+          }}
+        >
+          <span className="mx-auto block h-1.5 w-12 rounded-full bg-white/30" aria-hidden="true" />
+        </button>
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-base font-semibold">{title}</h2>
           <button className="rounded-lg border border-white/20 px-3 py-1.5 text-sm" onClick={onClose}>
