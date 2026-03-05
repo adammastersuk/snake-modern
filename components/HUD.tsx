@@ -1,30 +1,21 @@
-'use client';
-
-interface Props {
+interface HUDProps {
   score: number;
   best: number;
   speed: number;
   length: number;
-  replayMode: boolean;
 }
 
-export function HUD({ score, best, speed, length, replayMode }: Props) {
+export function HUD({ score, best, speed, length }: HUDProps) {
   return (
-    <div className="grid grid-cols-2 gap-2 rounded-2xl border border-white/20 bg-white/10 p-4 text-sm backdrop-blur-md md:grid-cols-5">
+    <div className="grid grid-cols-2 gap-2 rounded-2xl border border-white/15 bg-black/25 p-3 text-sm md:grid-cols-4">
       <Stat label="Score" value={score} />
       <Stat label="Best" value={best} />
-      <Stat label="Speed" value={speed.toFixed(1)} />
+      <Stat label="Speed" value={speed.toFixed(2)} />
       <Stat label="Length" value={length} />
-      <Stat label="Mode" value={replayMode ? 'Replay' : 'Live'} />
     </div>
   );
 }
 
 function Stat({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div>
-      <p className="text-white/60">{label}</p>
-      <p className="text-lg font-semibold">{value}</p>
-    </div>
-  );
+  return <p><span className="text-white/60">{label}:</span> <span className="font-semibold">{value}</span></p>;
 }
