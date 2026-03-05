@@ -6,11 +6,9 @@ export const defaultConfig: GameConfig = {
   height: 24,
   initialSpeed: 8,
   speedIncreaseEvery: 3,
-  speedIncreaseAmount: 0.6,
   maxSpeed: 18,
   wrapAround: false,
-  powerUpChance: 0.08,
-  practiceMode: false
+  powerUpChance: 0.08
 };
 
 const dirs: Record<Direction, Point> = {
@@ -123,7 +121,7 @@ export const stepGame = (state: GameState, config: GameConfig, inputQueue: Direc
 
   const willGhost = effectActive(state, 'ghost');
   const body = state.pendingGrowth > 0 ? state.snake : state.snake.slice(0, -1);
-  if (!config.practiceMode && !willGhost && body.some((s) => pointEq(s, next))) {
+  if (!willGhost && body.some((s) => pointEq(s, next))) {
     state.alive = false;
     return state;
   }
@@ -134,8 +132,8 @@ export const stepGame = (state: GameState, config: GameConfig, inputQueue: Direc
     state.pendingGrowth += 1;
     state.score += 10 * state.multiplier;
     state.food = spawnFreeCell(state, config, rng);
-    if (config.speedIncreaseAmount > 0 && Math.floor(state.score / 10) % config.speedIncreaseEvery === 0) {
-      state.speed = Math.min(config.maxSpeed, state.speed + config.speedIncreaseAmount);
+    if (Math.floor(state.score / 10) % config.speedIncreaseEvery === 0) {
+      state.speed = Math.min(config.maxSpeed, state.speed + 0.6);
     }
     maybeSpawnPowerUp(state, config, rng);
   }
@@ -158,56 +156,20 @@ export const stepGame = (state: GameState, config: GameConfig, inputQueue: Direc
   return state;
 };
 
-export const buildReplay = (seed: number, config: GameConfig, events: ReplayLog['events'], meta?: ReplayLog['meta']): ReplayLog => ({
+export const buildReplay = (seed: number, config: GameConfig, events: ReplayLog['events']): ReplayLog => ({
   seed,
   config,
-  events,
-  meta
+  events
 });
 
-export const simulateReplay = (replay: ReplayLog, toStep?: number): GameState => {
+export const simulateReplay = (replay: ReplayLog): GameState => {
   const state = createInitialState(replay.seed, replay.config);
   const queue: Direction[] = [];
   const rng = new SeededRng(state.seed);
   const maxStep = replay.events[replay.events.length - 1]?.step ?? 0;
-  const stopAt = toStep ?? maxStep + 250;
-  for (let step = 0; step <= stopAt && state.alive; step++) {
-    replay.events.filter((ev) => ev.step === step).forEach((ev) => queue.push(ev.direction));
-    stepGame(state, replay.config, queue, rng);
-  }
-  return state;
-};
-
-export const createReplaySnapshots = (replay: ReplayLog, every = 20) => {
-  const snapshots = new Map<number, GameState>();
-  const state = createInitialState(replay.seed, replay.config);
-  const queue: Direction[] = [];
-  const rng = new SeededRng(state.seed);
-  const maxStep = replay.events[replay.events.length - 1]?.step ?? 0;
-  snapshots.set(0, structuredClone(state));
-
   for (let step = 0; step <= maxStep + 250 && state.alive; step++) {
     replay.events.filter((ev) => ev.step === step).forEach((ev) => queue.push(ev.direction));
     stepGame(state, replay.config, queue, rng);
-    if (step % every === 0) snapshots.set(step, structuredClone(state));
   }
-
-  return snapshots;
-};
-
-export const simulateReplayFromSnapshot = (replay: ReplayLog, targetStep: number, snapshots: Map<number, GameState>, every = 20): GameState => {
-  const checkpoint = Math.floor(targetStep / every) * every;
-  const base = snapshots.get(checkpoint);
-  if (!base) return simulateReplay(replay, targetStep);
-
-  const state = structuredClone(base);
-  const queue: Direction[] = [];
-  const rng = new SeededRng(state.seed);
-
-  for (let step = checkpoint; step <= targetStep && state.alive; step++) {
-    replay.events.filter((ev) => ev.step === step).forEach((ev) => queue.push(ev.direction));
-    stepGame(state, replay.config, queue, rng);
-  }
-
   return state;
 };

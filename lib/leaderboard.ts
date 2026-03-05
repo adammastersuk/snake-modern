@@ -7,30 +7,12 @@ const scoreSchema = z.object({
   name: z.string().trim().max(20).optional(),
   score: z.number().int().nonnegative(),
   mode: z.enum(['modern', 'retro']),
-  replay: z.any(),
-  difficulty: z.string().optional(),
-  wrap: z.boolean().optional(),
-  practice: z.boolean().optional(),
-  theme: z.enum(['modern', 'retro']).optional(),
-  palette: z.string().optional()
+  replay: z.any()
 });
 
 const canUseDb = !!process.env.POSTGRES_URL;
 
-type ScoreRow = {
-  name?: string;
-  score: number;
-  mode: string;
-  created_at: string;
-  difficulty?: string;
-  wrap?: boolean;
-  practice?: boolean;
-  theme?: string;
-  palette?: string;
-  replay?: ReplayLog;
-};
-
-const fallbackStore: ScoreRow[] = [];
+const fallbackStore: { name?: string; score: number; mode: string; created_at: string }[] = [];
 const requests = new Map<string, number[]>();
 
 export const isGlobalLeaderboardEnabled = () => canUseDb;
@@ -48,9 +30,10 @@ export const allowRequest = (key: string, limit = 8, windowMs = 60_000) => {
 export const validateSubmission = (payload: unknown) => {
   const parsed = scoreSchema.parse(payload);
   const replay = parsed.replay as ReplayLog;
-  if (!replay) throw new Error('Replay required');
   const state = simulateReplay(replay);
-  if (state.score !== parsed.score) throw new Error('Replay score verification failed');
+  if (state.score !== parsed.score) {
+    throw new Error('Replay score verification failed');
+  }
   return parsed;
 };
 
@@ -60,22 +43,17 @@ export const saveScore = async (submission: ReturnType<typeof validateSubmission
       name: submission.name,
       score: submission.score,
       mode: submission.mode,
-      created_at: new Date().toISOString(),
-      difficulty: submission.difficulty,
-      wrap: submission.wrap,
-      practice: submission.practice,
-      theme: submission.theme,
-      palette: submission.palette,
-      replay: submission.replay
+      created_at: new Date().toISOString()
     });
     return;
   }
-  await sql`INSERT INTO scores (name, score, mode, difficulty, wrap, practice, theme, palette, replay, created_at)
-    VALUES (${submission.name ?? null}, ${submission.score}, ${submission.mode}, ${submission.difficulty ?? null}, ${submission.wrap ?? false}, ${submission.practice ?? false}, ${submission.theme ?? submission.mode}, ${submission.palette ?? null}, ${JSON.stringify(submission.replay)}, NOW())`;
+  await sql`INSERT INTO scores (name, score, mode, created_at) VALUES (${submission.name ?? null}, ${submission.score}, ${submission.mode}, NOW())`;
 };
 
 export const getScores = async (limit: number) => {
-  if (!canUseDb) return fallbackStore.slice(0, limit);
-  const { rows } = await sql`SELECT name, score, mode, created_at, difficulty, wrap, practice, theme, palette, replay FROM scores ORDER BY score DESC, created_at DESC LIMIT ${limit}`;
-  return rows as ScoreRow[];
+  if (!canUseDb) {
+    return fallbackStore.slice(0, limit);
+  }
+  const { rows } = await sql`SELECT name, score, mode, created_at FROM scores ORDER BY score DESC, created_at DESC LIMIT ${limit}`;
+  return rows;
 };

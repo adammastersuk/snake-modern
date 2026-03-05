@@ -25,7 +25,9 @@ body {
   position: fixed;
   inset: 0;
   z-index: -1;
-  background: radial-gradient(circle at 10% 20%, rgba(45, 212, 191, 0.2), transparent 40%), radial-gradient(circle at 80% 10%, rgba(99, 102, 241, 0.2), transparent 35%), radial-gradient(circle at 50% 90%, rgba(14, 165, 233, 0.15), transparent 40%);
+  background: radial-gradient(circle at 10% 20%, rgba(45, 212, 191, 0.2), transparent 40%),
+    radial-gradient(circle at 80% 10%, rgba(99, 102, 241, 0.2), transparent 35%),
+    radial-gradient(circle at 50% 90%, rgba(14, 165, 233, 0.15), transparent 40%);
   animation: drift 12s ease-in-out infinite alternate;
 }
 
@@ -36,8 +38,12 @@ body {
 }
 
 @keyframes drift {
-  from { transform: translateY(0px); }
-  to { transform: translateY(-12px); }
+  from {
+    transform: translateY(0px);
+  }
+  to {
+    transform: translateY(-12px);
+  }
 }
 
 .retro-scanlines::after {
@@ -45,6 +51,12 @@ body {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background: repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.04), rgba(255,255,255,0.04) 1px, transparent 2px, transparent 4px);
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(255, 255, 255, 0.04),
+    rgba(255, 255, 255, 0.04) 1px,
+    transparent 2px,
+    transparent 4px
+  );
   mix-blend-mode: screen;
 }

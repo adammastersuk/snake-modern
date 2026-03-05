@@ -2,11 +2,10 @@
 
 import { Direction } from '@/lib/game/types';
 
-export function MobileControls({ onInput, showDpad }: { onInput: (d: Direction) => void; showDpad: boolean }) {
-  if (!showDpad) return null;
-  const btn = 'rounded bg-white/20 px-4 py-3 text-lg font-bold focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-300';
+export function MobileControls({ onInput }: { onInput: (d: Direction) => void }) {
+  const btn = 'rounded bg-white/20 px-4 py-3 text-lg font-bold';
   return (
-    <div className="grid w-48 grid-cols-3 gap-2 md:hidden" aria-label="On-screen movement controls">
+    <div className="grid w-44 grid-cols-3 gap-2 md:hidden">
       <div />
       <button className={btn} onClick={() => onInput('up')} aria-label="Move up">↑</button>
       <div />

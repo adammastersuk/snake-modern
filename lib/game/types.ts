@@ -1,7 +1,5 @@
 export type Direction = 'up' | 'down' | 'left' | 'right';
 export type ThemeMode = 'modern' | 'retro';
-export type RetroPalette = 'crt-green' | 'amber' | 'mono' | 'gameboy';
-export type Difficulty = 'casual' | 'classic' | 'hardcore';
 
 export type Point = { x: number; y: number };
 
@@ -23,31 +21,20 @@ export interface InputEvent {
   direction: Direction;
 }
 
+export interface ReplayLog {
+  seed: number;
+  config: GameConfig;
+  events: InputEvent[];
+}
+
 export interface GameConfig {
   width: number;
   height: number;
   initialSpeed: number;
   speedIncreaseEvery: number;
-  speedIncreaseAmount: number;
   maxSpeed: number;
   wrapAround: boolean;
   powerUpChance: number;
-  practiceMode: boolean;
-}
-
-export interface ReplayMeta {
-  difficulty: Difficulty;
-  wrapAround: boolean;
-  practiceMode: boolean;
-  theme: ThemeMode;
-  palette: RetroPalette;
-}
-
-export interface ReplayLog {
-  seed: number;
-  config: GameConfig;
-  events: InputEvent[];
-  meta?: ReplayMeta;
 }
 
 export interface GameState {
