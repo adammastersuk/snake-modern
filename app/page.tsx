@@ -322,12 +322,12 @@ export default function Home() {
           <div className="mb-2 flex items-center justify-between gap-2">
             <HUD score={uiState.score} best={best} speed={uiState.speed} length={uiState.snake.length} />
             <button className="min-h-11 rounded-xl border border-white/20 bg-white/10 px-3 py-2 text-sm font-medium lg:hidden" onClick={() => setDrawerOpen(true)}>
-              Settings
+              Game Settings
             </button>
           </div>
           {showMobileHint && isMobile && (
             <div className="mb-2 flex items-start justify-between gap-2 rounded-xl border border-cyan-300/30 bg-cyan-500/10 p-2 text-xs">
-              <p>Tip: Controls are pinned at the bottom. Swipe the board to steer and tap Settings to adjust options or watch replays.</p>
+              <p>Tip: Controls are pinned at the bottom. Swipe the board to steer and tap Game Settings to tune your run or watch replays.</p>
               <button
                 type="button"
                 className="rounded border border-white/20 px-2 py-1"
@@ -367,7 +367,7 @@ export default function Home() {
         </aside>
       </div>
 
-      <MobileDrawer open={drawerOpen} title="Settings" onClose={() => setDrawerOpen(false)}>
+      <MobileDrawer open={drawerOpen} title="Game Settings" onClose={() => setDrawerOpen(false)}>
         <div data-mobile-drawer-scroll="true" className="space-y-3">
           <SettingsPanel
             theme={theme}
@@ -400,7 +400,7 @@ export default function Home() {
       <footer className="fixed inset-x-0 bottom-0 z-50 w-full max-w-full border-t border-white/10 bg-slate-950/90 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur md:hidden">
         <div className="mx-auto mb-2 flex w-full max-w-md items-center justify-between text-xs text-slate-300/85">
           <span>Thumb controls</span>
-          <button className="rounded border border-white/20 px-2 py-1" onClick={() => setDrawerOpen(true)}>Settings</button>
+          <button className="rounded border border-white/20 px-2 py-1" onClick={() => setDrawerOpen(true)}>Game Settings</button>
         </div>
         <div className="mx-auto w-full max-w-md">
           <MobileControls
