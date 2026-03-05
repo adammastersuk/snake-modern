@@ -7,6 +7,8 @@
 html,
 body {
   height: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
 body {
@@ -21,6 +23,7 @@ body {
   touch-action: none;
   -webkit-user-select: none;
   user-select: none;
+  overscroll-behavior: none;
 }
 
 .retro-font,

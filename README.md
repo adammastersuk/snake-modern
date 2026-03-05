@@ -97,3 +97,25 @@ CREATE TABLE IF NOT EXISTS scores (
 
 CREATE INDEX IF NOT EXISTS idx_scores_rank ON scores (score DESC, created_at DESC);
 ```
+
+## Mobile play mode + controls
+
+Mobile now uses a dedicated play mode designed to keep controls reachable without scrolling:
+
+- A fixed bottom controls bar keeps D-pad + Pause/Restart in thumb range.
+- The game board area uses touch-action safeguards so touch gestures control Snake instead of the browser page.
+- Secondary panels (Settings, Replay, Leaderboard) move into a mobile bottom drawer opened via **Panels**.
+- Opening the drawer pauses the run and traps focus in the drawer; closing it restores the previous pause state.
+- Safe-area insets are respected for iOS (`env(safe-area-inset-bottom)`).
+- Optional haptic feedback for D-pad presses is available from the mobile Panels drawer.
+
+### Mobile sizing checklist
+
+Use this checklist when testing small screens (e.g. 375px width and below):
+
+- [ ] No horizontal page scrolling.
+- [ ] Canvas fits viewport width and stays centered.
+- [ ] D-pad / controls bar always visible without vertical scrolling.
+- [ ] Touching canvas or controls does not trigger pull-to-refresh / accidental page scroll.
+- [ ] Panels drawer opens/closes correctly; internal drawer content scrolls.
+- [ ] Replay link export/import still functions from the mobile drawer.
