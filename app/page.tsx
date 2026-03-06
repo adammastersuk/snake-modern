@@ -19,6 +19,28 @@ import { Difficulty, Direction, InputEvent, ScoreEntry, ThemeMode } from '@/lib/
 import { THEME_SURFACES, THEME_TITLES } from '@/lib/theme';
 
 const DEFAULT_TILE = 22;
+const MAX_PLAYER_NAME_LENGTH = 20;
+
+interface SubmitFeedback {
+  status: 'idle' | 'submitting' | 'success' | 'error';
+  message: string;
+}
+
+interface FinalRunSnapshot {
+  score: number;
+  length: number;
+  difficulty: Difficulty;
+  mode: ThemeMode;
+  wrapAround: boolean;
+  practiceMode: boolean;
+  replay: ReturnType<typeof buildReplay>;
+}
+
+interface SubmissionResult {
+  name: string;
+  score: number;
+  rank: number | null;
+}
 
 export default function Home() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -29,7 +51,7 @@ export default function Home() {
   const [showDpad, setShowDpad] = useState(true);
   const [paused, setPaused] = useState(true);
   const [toast, setToast] = useState('');
-  const [submitFeedback, setSubmitFeedback] = useState<{ status: 'idle' | 'submitting' | 'success' | 'error'; message: string }>({ status: 'idle', message: '' });
+  const [submitFeedback, setSubmitFeedback] = useState<SubmitFeedback>({ status: 'idle', message: '' });
   const [running, setRunning] = useState(false);
   const [best, setBest] = useState(0);
   const [scores, setScores] = useState<ScoreEntry[]>([]);
@@ -42,6 +64,9 @@ export default function Home() {
   const [canvasFocused, setCanvasFocused] = useState(false);
   const [showMobileHint, setShowMobileHint] = useState(false);
   const [hapticsEnabled, setHapticsEnabled] = useState(false);
+  const [playerName, setPlayerName] = useState('');
+  const [finalRun, setFinalRun] = useState<FinalRunSnapshot | null>(null);
+  const [submissionResult, setSubmissionResult] = useState<SubmissionResult | null>(null);
   const pausedBeforeDrawer = useRef(true);
   const reduceMotion = usePrefersReducedMotion();
   const mobileFooterRef = useRef<HTMLElement>(null);
@@ -66,7 +91,7 @@ export default function Home() {
     setScores(list.scores ?? []);
   }, []);
 
-  const reset = useCallback((seed = createSeed()) => {
+  const restartGame = useCallback((seed = createSeed()) => {
     const next = createInitialState(seed, config);
     stateRef.current = next;
     rngRef.current = new SeededRng(next.seed);
@@ -79,9 +104,12 @@ export default function Home() {
     setReplayFrames([]);
     setReplayFrame(0);
     setSubmitFeedback({ status: 'idle', message: '' });
+    setFinalRun(null);
+    setSubmissionResult(null);
+    setPlayerName('');
   }, [config]);
 
-  useEffect(() => reset(), [config, reset]);
+  useEffect(() => restartGame(), [config, restartGame]);
   useEffect(() => {
     const media = window.matchMedia('(max-width: 1023px)');
     const sync = () => setIsMobile(media.matches);
@@ -138,11 +166,29 @@ export default function Home() {
         setRunning(true);
         setPaused((p) => !p);
       }
-      if (e.key.toLowerCase() === 'r') reset();
+      if (e.key.toLowerCase() === 'r') restartGame();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [input, reset]);
+  }, [input, restartGame]);
+
+  const endGame = useCallback(() => {
+    const finalState = stateRef.current;
+    const replay = buildReplay(replaySeedRef.current, config, eventsRef.current, finalState.step);
+    const snapshot: FinalRunSnapshot = {
+      score: finalState.score,
+      length: finalState.snake.length,
+      difficulty,
+      mode: theme,
+      wrapAround,
+      practiceMode,
+      replay
+    };
+
+    setFinalRun(snapshot);
+    setPaused(true);
+    setRunning(false);
+  }, [config, difficulty, practiceMode, theme, wrapAround]);
 
   useEffect(() => {
     const target = canvasRef.current;
@@ -267,9 +313,11 @@ export default function Home() {
       accumulator += dt;
       const frameMs = 1000 / stateRef.current.speed;
       while (accumulator >= frameMs) {
-        if (!paused && running && replayFrames.length === 0) {
-          stepGame(stateRef.current, config, queueRef.current, rngRef.current);
-          if (!stateRef.current.alive) { setPaused(true); setRunning(false); }
+          if (!paused && running && replayFrames.length === 0) {
+            stepGame(stateRef.current, config, queueRef.current, rngRef.current);
+            if (!stateRef.current.alive) {
+              endGame();
+            }
         }
         accumulator -= frameMs;
       }
@@ -280,7 +328,7 @@ export default function Home() {
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [config, paused, running, replayFrames, replayFrame, theme, canvasMetrics]);
+  }, [config, paused, running, replayFrames, replayFrame, theme, canvasMetrics, endGame]);
 
   useEffect(() => {
     if (!uiState.alive && uiState.score > best) {
@@ -303,26 +351,39 @@ export default function Home() {
   };
 
   const submitScore = async () => {
-    const finalState = stateRef.current;
-    const finalReplay = buildReplay(replaySeedRef.current, config, eventsRef.current, finalState.step);
-
-    if (finalState.alive || finalState.score <= 0) {
+    const candidate = finalRun;
+    if (!candidate || candidate.score <= 0) {
       const message = 'Finish a run first (run must end with a score).';
       setSubmitFeedback({ status: 'error', message });
       setToast('Finish a run first');
       return;
     }
 
+    const trimmedName = playerName.trim();
+    if (!trimmedName) {
+      const message = 'Enter a display name before submitting.';
+      setSubmitFeedback({ status: 'error', message });
+      return;
+    }
+
+    if (trimmedName.length > MAX_PLAYER_NAME_LENGTH) {
+      const message = `Name must be ${MAX_PLAYER_NAME_LENGTH} characters or fewer.`;
+      setSubmitFeedback({ status: 'error', message });
+      return;
+    }
+
     setSubmitFeedback({ status: 'submitting', message: 'Submitting replay-backed score…' });
+    setSubmissionResult(null);
 
     const payload = {
-      score: finalState.score,
-      length: finalState.snake.length,
-      difficulty,
-      mode: theme,
-      wrapAround,
-      practiceMode,
-      replay: finalReplay
+      name: trimmedName,
+      score: candidate.score,
+      length: candidate.length,
+      difficulty: candidate.difficulty,
+      mode: candidate.mode,
+      wrapAround: candidate.wrapAround,
+      practiceMode: candidate.practiceMode,
+      replay: candidate.replay
     };
 
     const res = await fetch('/api/scores', {
@@ -346,8 +407,11 @@ export default function Home() {
       await refreshScores();
     }
 
-    const rankText = typeof data.rank === 'number' ? ` • Rank #${data.rank}` : '';
-    const success = `Score submitted (${data.score ?? finalState.score})${rankText}`;
+    const persistedScore = typeof data.score === 'number' ? data.score : candidate.score;
+    const rank = typeof data.rank === 'number' ? data.rank : null;
+    const rankText = rank ? ` • Rank #${rank}` : '';
+    const success = `Score submitted (${persistedScore})${rankText}`;
+    setSubmissionResult({ name: trimmedName, score: persistedScore, rank });
     setSubmitFeedback({ status: 'success', message: success });
     setToast('Score submitted');
   };
@@ -379,9 +443,27 @@ export default function Home() {
             <StartOverlay
               running={running}
               alive={uiState.alive}
-              score={uiState.score}
+              score={finalRun?.score ?? uiState.score}
               submitFeedback={submitFeedback}
-              onStart={() => { setRunning(true); setPaused(false); }}
+              playerName={playerName}
+              maxNameLength={MAX_PLAYER_NAME_LENGTH}
+              submissionResult={submissionResult}
+              onPlayerNameChange={(value) => {
+                setPlayerName(value.slice(0, MAX_PLAYER_NAME_LENGTH));
+                if (submitFeedback.status === 'error') {
+                  setSubmitFeedback({ status: 'idle', message: '' });
+                }
+              }}
+              onStart={() => {
+                if (uiState.alive) {
+                  setRunning(true);
+                  setPaused(false);
+                  return;
+                }
+                restartGame();
+                setRunning(true);
+                setPaused(false);
+              }}
               onSubmitScore={submitScore}
               theme={theme}
             />
@@ -402,7 +484,7 @@ export default function Home() {
           <div className="mt-2 hidden md:block"><KeyHints theme={theme} /></div>
         </section>
         <aside className="hidden space-y-3 lg:sticky lg:top-4 lg:block lg:h-fit">
-          <SettingsPanel theme={theme} difficulty={difficulty} wrapAround={wrapAround} practiceMode={practiceMode} showDpad={showDpad} paused={paused} onThemeChange={setTheme} onDifficultyChange={setDifficulty} onWrapChange={setWrapAround} onPracticeModeChange={setPracticeMode} onShowDpadChange={setShowDpad} onPauseToggle={() => setPaused((p) => !p)} onRestart={() => reset()} />
+          <SettingsPanel theme={theme} difficulty={difficulty} wrapAround={wrapAround} practiceMode={practiceMode} showDpad={showDpad} paused={paused} onThemeChange={setTheme} onDifficultyChange={setDifficulty} onWrapChange={setWrapAround} onPracticeModeChange={setPracticeMode} onShowDpadChange={setShowDpad} onPauseToggle={() => setPaused((p) => !p)} onRestart={() => restartGame()} />
           <ReplayPanel replayJson={replayJson} replayLink={replayLink} replayFrame={replayFrame} replayFrameMax={Math.max(0, replayFrames.length - 1)} onImport={loadReplay} onFrameChange={setReplayFrame} theme={theme} />
           <LeaderboardPanel scores={scores} onWatchReplay={loadReplay} theme={theme} />
         </aside>
@@ -410,7 +492,7 @@ export default function Home() {
 
       <MobileDrawer open={drawerOpen} title="Game Settings" onClose={() => setDrawerOpen(false)} theme={theme}>
         <div data-mobile-drawer-scroll="true" className="space-y-3">
-          <SettingsPanel theme={theme} difficulty={difficulty} wrapAround={wrapAround} practiceMode={practiceMode} showDpad={showDpad} paused={paused} onThemeChange={setTheme} onDifficultyChange={setDifficulty} onWrapChange={setWrapAround} onPracticeModeChange={setPracticeMode} onShowDpadChange={setShowDpad} onPauseToggle={() => setPaused((p) => !p)} onRestart={() => reset()} />
+          <SettingsPanel theme={theme} difficulty={difficulty} wrapAround={wrapAround} practiceMode={practiceMode} showDpad={showDpad} paused={paused} onThemeChange={setTheme} onDifficultyChange={setDifficulty} onWrapChange={setWrapAround} onPracticeModeChange={setPracticeMode} onShowDpadChange={setShowDpad} onPauseToggle={() => setPaused((p) => !p)} onRestart={() => restartGame()} />
           <div className={`rounded-2xl border p-3 ${surface.panel}`}>
             <label className="flex items-center justify-between gap-2 text-sm"><span>Haptic feedback</span><input type="checkbox" checked={hapticsEnabled} onChange={(e) => setHapticsEnabled(e.target.checked)} aria-label="Toggle haptic feedback" /></label>
           </div>
@@ -431,7 +513,7 @@ export default function Home() {
 
       <footer ref={mobileFooterRef} className={`fixed inset-x-0 bottom-0 z-50 w-full max-w-full border-t px-3 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2 md:hidden ${surface.footer}`}>
         <div className="mx-auto w-full max-w-md">
-          <MobileControls onInput={input} onPauseToggle={() => { setRunning(true); setPaused((p) => !p); }} onRestart={() => reset()} paused={paused} visible={showDpad} hapticsEnabled={hapticsEnabled} reduceMotion={reduceMotion} theme={theme} />
+          <MobileControls onInput={input} onPauseToggle={() => { setRunning(true); setPaused((p) => !p); }} onRestart={() => restartGame()} paused={paused} visible={showDpad} hapticsEnabled={hapticsEnabled} reduceMotion={reduceMotion} theme={theme} />
         </div>
       </footer>
     </main>

@@ -16,6 +16,15 @@ const getDatabaseUrl = () => {
   return connectionString;
 };
 
+export const hasDatabaseConfig = () => {
+  return Boolean(
+    process.env.POSTGRES_URL ??
+    process.env.DATABASE_URL ??
+    process.env.POSTGRES_PRISMA_URL ??
+    process.env.POSTGRES_URL_NON_POOLING
+  );
+};
+
 const neonSql = () => neon(getDatabaseUrl());
 
 export const query = async <T>(
