@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildGameConfig } from '@/lib/game/difficulty';
 import { SeededRng } from '@/lib/game/rng';
-import { createInitialState, enqueueDirection, stepGame } from '@/lib/game/simulation';
+import { buildReplay, createInitialState, enqueueDirection, stepGame } from '@/lib/game/simulation';
 import { Direction } from '@/lib/game/types';
 
 describe('simulation determinism', () => {
@@ -27,5 +27,17 @@ describe('simulation determinism', () => {
     expect(a.score).toBe(b.score);
     expect(a.snake).toEqual(b.snake);
     expect(a.seed).toBe(b.seed);
+  });
+
+
+  it('clones replay events so completed runs are immutable', () => {
+    const config = buildGameConfig('classic', false);
+    const events = [{ step: 3, direction: 'up' as const }];
+
+    const replay = buildReplay(42, config, events, 10);
+    events.push({ step: 5, direction: 'left' });
+
+    expect(replay.events).toHaveLength(1);
+    expect(replay.events[0]).toEqual({ step: 3, direction: 'up' });
   });
 });
