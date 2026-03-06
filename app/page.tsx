@@ -36,12 +36,14 @@ export default function Home() {
   const [replayFrames, setReplayFrames] = useState<ReturnType<typeof buildReplayFrames>>([]);
   const [replayFrame, setReplayFrame] = useState(0);
   const [isMobile, setIsMobile] = useState(false);
+  const [mobileFooterHeight, setMobileFooterHeight] = useState(0);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [canvasFocused, setCanvasFocused] = useState(false);
   const [showMobileHint, setShowMobileHint] = useState(false);
   const [hapticsEnabled, setHapticsEnabled] = useState(false);
   const pausedBeforeDrawer = useRef(true);
   const reduceMotion = usePrefersReducedMotion();
+  const mobileFooterRef = useRef<HTMLElement>(null);
 
   const config = useMemo(() => buildGameConfig(difficulty, practiceMode, wrapAround), [difficulty, practiceMode, wrapAround]);
   const [uiState, setUiState] = useState(() => createInitialState(createSeed(), config));
@@ -169,7 +171,9 @@ export default function Home() {
     const onResize = () => {
       const dpr = window.devicePixelRatio || 1;
       const widthLimit = Math.max(320, window.innerWidth) - (isMobile ? 20 : 32);
-      const heightLimit = isMobile ? Math.max(180, window.innerHeight - (showDpad ? 330 : 210)) : Math.max(360, window.innerHeight - 260);
+      const fallbackFooter = showDpad ? 196 : 96;
+      const measuredFooter = mobileFooterHeight > 0 ? mobileFooterHeight : fallbackFooter;
+      const heightLimit = isMobile ? Math.max(180, window.innerHeight - (measuredFooter + 132)) : Math.max(360, window.innerHeight - 260);
       const tileByWidth = Math.floor(widthLimit / config.width);
       const tileByHeight = Math.floor(heightLimit / config.height);
       const nextTile = Math.max(12, Math.min(DEFAULT_TILE, tileByWidth, tileByHeight));
@@ -179,7 +183,38 @@ export default function Home() {
     window.addEventListener('resize', onResize);
     window.addEventListener('orientationchange', onResize);
     return () => { window.removeEventListener('resize', onResize); window.removeEventListener('orientationchange', onResize); };
-  }, [config.height, config.width, isMobile, showDpad]);
+  }, [config.height, config.width, isMobile, mobileFooterHeight, showDpad]);
+
+  useEffect(() => {
+    if (!isMobile) {
+      setMobileFooterHeight(0);
+      return;
+    }
+
+    const node = mobileFooterRef.current;
+    if (!node) return;
+
+    const updateHeight = () => {
+      const next = Math.ceil(node.getBoundingClientRect().height);
+      setMobileFooterHeight((prev) => (prev === next ? prev : next));
+    };
+
+    updateHeight();
+    const observer = new ResizeObserver(updateHeight);
+    observer.observe(node);
+    window.addEventListener('resize', updateHeight);
+    window.addEventListener('orientationchange', updateHeight);
+    window.visualViewport?.addEventListener('resize', updateHeight);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', updateHeight);
+      window.removeEventListener('orientationchange', updateHeight);
+      window.visualViewport?.removeEventListener('resize', updateHeight);
+    };
+  }, [isMobile, showDpad]);
+
+  const mobileFooterReserve = isMobile ? (mobileFooterHeight || (showDpad ? 196 : 96)) + 12 : 0;
 
   const mobilePlayMode = isMobile && !drawerOpen && (running || canvasFocused);
 
@@ -315,7 +350,7 @@ export default function Home() {
   };
 
   return (
-    <main className={`mx-auto max-w-7xl overflow-x-hidden px-3 pb-44 pt-3 md:p-4 md:pb-4 ${surface.page}`}>
+    <main className={`mx-auto max-w-7xl overflow-x-hidden px-3 pt-3 md:p-4 ${surface.page}`}>
       <h1 className="mb-3 text-2xl font-bold sm:text-3xl">{THEME_TITLES[theme]}</h1>
       <div className="grid max-w-full gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
         <section className="min-w-0">
@@ -371,13 +406,11 @@ export default function Home() {
         </section>
       )}
 
+      {isMobile && <div aria-hidden="true" className="md:hidden" style={{ height: `${mobileFooterReserve}px` }} />}
+
       <Toast message={toast} theme={theme} />
 
-      <footer className={`fixed inset-x-0 bottom-0 z-50 w-full max-w-full border-t p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] md:hidden ${surface.footer}`}>
-        <div className={`mx-auto mb-2 flex w-full max-w-md items-center justify-between text-xs ${surface.textMuted}`}>
-          <span>Thumb controls</span>
-          <button className={`rounded border px-2 py-1 ${surface.buttonGhost}`} onClick={() => setDrawerOpen(true)}>Game Settings</button>
-        </div>
+      <footer ref={mobileFooterRef} className={`fixed inset-x-0 bottom-0 z-50 w-full max-w-full border-t px-3 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2 md:hidden ${surface.footer}`}>
         <div className="mx-auto w-full max-w-md">
           <MobileControls onInput={input} onPauseToggle={() => { setRunning(true); setPaused((p) => !p); }} onRestart={() => reset()} paused={paused} visible={showDpad} hapticsEnabled={hapticsEnabled} reduceMotion={reduceMotion} theme={theme} />
         </div>
