@@ -29,6 +29,7 @@ export default function Home() {
   const [showDpad, setShowDpad] = useState(true);
   const [paused, setPaused] = useState(true);
   const [toast, setToast] = useState('');
+  const [submitFeedback, setSubmitFeedback] = useState<{ status: 'idle' | 'submitting' | 'success' | 'error'; message: string }>({ status: 'idle', message: '' });
   const [running, setRunning] = useState(false);
   const [best, setBest] = useState(0);
   const [scores, setScores] = useState<ScoreEntry[]>([]);
@@ -48,17 +49,25 @@ export default function Home() {
   const stateRef = useRef(uiState);
   const queueRef = useRef<Direction[]>([]);
   const rngRef = useRef(new SeededRng(uiState.seed));
+  const replaySeedRef = useRef(uiState.seed);
   const eventsRef = useRef<InputEvent[]>([]);
   const surface = THEME_SURFACES[theme];
 
-  const replayLog = useMemo(() => buildReplay(uiState.seed, config, eventsRef.current, stateRef.current.step), [uiState.step, uiState.seed, config]);
+  const replayLog = useMemo(() => buildReplay(replaySeedRef.current, config, eventsRef.current, stateRef.current.step), [uiState.step, config]);
   const replayJson = useMemo(() => exportReplay(replayLog), [replayLog]);
   const replayLink = useMemo(() => `?replay=${encodeURIComponent(compressReplay(replayLog))}`, [replayLog]);
+
+
+  const refreshScores = useCallback(async () => {
+    const list = await fetch('/api/scores').then((r) => r.json());
+    setScores(list.scores ?? []);
+  }, []);
 
   const reset = useCallback((seed = createSeed()) => {
     const next = createInitialState(seed, config);
     stateRef.current = next;
     rngRef.current = new SeededRng(next.seed);
+    replaySeedRef.current = next.seed;
     queueRef.current = [];
     eventsRef.current = [];
     setPaused(true);
@@ -95,10 +104,10 @@ export default function Home() {
 
   useEffect(() => {
     setBest(Number(localStorage.getItem('snake-best') ?? '0'));
-    fetch('/api/scores').then((r) => r.json()).then((d) => setScores(d.scores ?? [])).catch(() => undefined);
+    refreshScores().catch(() => undefined);
     setShowMobileHint(localStorage.getItem('snake-mobile-hint-dismissed') !== '1');
     setHapticsEnabled(localStorage.getItem('snake-haptics') === '1');
-  }, []);
+  }, [refreshScores]);
 
   useEffect(() => {
     if (!toast) return;
@@ -107,7 +116,6 @@ export default function Home() {
   }, [toast]);
 
   useEffect(() => localStorage.setItem('snake-haptics', hapticsEnabled ? '1' : '0'), [hapticsEnabled]);
-
   const input = useCallback((dir: Direction) => {
     enqueueDirection(queueRef.current, stateRef.current, dir);
     eventsRef.current.push({ step: stateRef.current.step, direction: dir });
@@ -257,37 +265,54 @@ export default function Home() {
   };
 
   const submitScore = async () => {
-  const finalState = stateRef.current;
+    const finalState = stateRef.current;
+    const finalReplay = buildReplay(replaySeedRef.current, config, eventsRef.current, finalState.step);
 
-  if (finalState.alive || finalState.score <= 0) {
-    return setToast('Finish a run first');
-  }
+    if (finalState.alive || finalState.score <= 0) {
+      const message = 'Finish a run first (run must end with a score).';
+      setSubmitFeedback({ status: 'error', message });
+      setToast('Finish a run first');
+      return;
+    }
 
-  const payload = {
-    score: finalState.score,
-    length: finalState.snake.length,
-    difficulty,
-    mode: theme,
-    wrapAround,
-    practiceMode,
-    replay: replayLog
+    setSubmitFeedback({ status: 'submitting', message: 'Submitting replay-backed score…' });
+
+    const payload = {
+      score: finalState.score,
+      length: finalState.snake.length,
+      difficulty,
+      mode: theme,
+      wrapAround,
+      practiceMode,
+      replay: finalReplay
+    };
+
+    const res = await fetch('/api/scores', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => null);
+      const message = data?.error ?? 'Score submission failed';
+      setSubmitFeedback({ status: 'error', message });
+      setToast('Score submit failed');
+      return;
+    }
+
+    const data = await res.json().catch(() => ({}));
+    if (Array.isArray(data.scores)) {
+      setScores(data.scores);
+    } else {
+      await refreshScores();
+    }
+
+    const rankText = typeof data.rank === 'number' ? ` • Rank #${data.rank}` : '';
+    const success = `Score submitted (${data.score ?? finalState.score})${rankText}`;
+    setSubmitFeedback({ status: 'success', message: success });
+    setToast('Score submitted');
   };
-
-  const res = await fetch('/api/scores', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
-  });
-
-  if (!res.ok) {
-    const data = await res.json().catch(() => null);
-    return setToast(data?.error ?? 'Score submit failed');
-  }
-
-  const list = await fetch('/api/scores').then((r) => r.json());
-  setScores(list.scores ?? []);
-  setToast('Score submitted');
-};
 
   return (
     <main className={`mx-auto max-w-7xl overflow-x-hidden px-3 pb-44 pt-3 md:p-4 md:pb-4 ${surface.page}`}>
@@ -300,7 +325,7 @@ export default function Home() {
           </div>
           {showMobileHint && isMobile && (
             <div className={`mb-2 flex items-start justify-between gap-2 rounded-xl border p-2 text-xs ${surface.softPanel}`}>
-              <p>Tip: Controls are pinned at the bottom. Swipe the board to steer and tap Game Settings to tune your run or watch replays.</p>
+              <p>Tip: Controls are pinned at the bottom. Swipe the board to steer and tap Game Settings to tune your run or manage settings. Leaderboards are now right below the board.</p>
               <button type="button" className={`rounded border px-2 py-1 ${surface.buttonGhost}`} onClick={() => { setShowMobileHint(false); localStorage.setItem('snake-mobile-hint-dismissed', '1'); }}>Dismiss</button>
             </div>
           )}
@@ -325,7 +350,7 @@ export default function Home() {
         <aside className="hidden space-y-3 lg:sticky lg:top-4 lg:block lg:h-fit">
           <SettingsPanel theme={theme} difficulty={difficulty} wrapAround={wrapAround} practiceMode={practiceMode} showDpad={showDpad} paused={paused} onThemeChange={setTheme} onDifficultyChange={setDifficulty} onWrapChange={setWrapAround} onPracticeModeChange={setPracticeMode} onShowDpadChange={setShowDpad} onPauseToggle={() => setPaused((p) => !p)} onRestart={() => reset()} />
           <ReplayPanel replayJson={replayJson} replayLink={replayLink} replayFrame={replayFrame} replayFrameMax={Math.max(0, replayFrames.length - 1)} onImport={loadReplay} onFrameChange={setReplayFrame} theme={theme} />
-          <LeaderboardPanel scores={scores} onWatchReplay={loadReplay} onSubmitScore={submitScore} theme={theme} />
+          <LeaderboardPanel scores={scores} onWatchReplay={loadReplay} onSubmitScore={submitScore} submitFeedback={submitFeedback} theme={theme} />
         </aside>
       </div>
 
@@ -336,9 +361,15 @@ export default function Home() {
             <label className="flex items-center justify-between gap-2 text-sm"><span>Haptic feedback</span><input type="checkbox" checked={hapticsEnabled} onChange={(e) => setHapticsEnabled(e.target.checked)} aria-label="Toggle haptic feedback" /></label>
           </div>
           <ReplayPanel replayJson={replayJson} replayLink={replayLink} replayFrame={replayFrame} replayFrameMax={Math.max(0, replayFrames.length - 1)} onImport={loadReplay} onFrameChange={setReplayFrame} theme={theme} />
-          <LeaderboardPanel scores={scores} onWatchReplay={loadReplay} onSubmitScore={submitScore} theme={theme} />
         </div>
       </MobileDrawer>
+
+
+      {isMobile && (
+        <section className="mt-4 space-y-3 lg:hidden">
+          <LeaderboardPanel scores={scores} onWatchReplay={loadReplay} onSubmitScore={submitScore} submitFeedback={submitFeedback} theme={theme} />
+        </section>
+      )}
 
       <Toast message={toast} theme={theme} />
 
