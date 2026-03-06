@@ -15,10 +15,18 @@ export interface ScoreSubmission {
   replay: ReplayLog;
 }
 
-export const validateScore = (payload: ScoreSubmission) => {
+export const validateScore = (payload: ScoreSubmission): ScoreSubmission => {
   const result = simulateReplay(payload.replay);
-  if (result.score !== payload.score) throw new Error('Replay score mismatch');
-  return payload;
+
+  if (result.score <= 0) {
+    throw new Error('Invalid replay');
+  }
+
+  return {
+    ...payload,
+    score: result.score,
+    length: result.snake.length
+  };
 };
 
 export const getScores = async (limit = 20): Promise<ScoreEntry[]> => {
