@@ -7,22 +7,6 @@ type UnknownRecord = Record<string, unknown>;
 
 const isDev = process.env.NODE_ENV !== 'production';
 
-const summarizeReplay = (replay: unknown) => {
-  if (!replay || typeof replay !== 'object') return null;
-  const replayObj = replay as UnknownRecord;
-  const events = Array.isArray(replayObj.events) ? replayObj.events.length : null;
-  const config = replayObj.config && typeof replayObj.config === 'object' ? (replayObj.config as UnknownRecord) : null;
-
-  return {
-    version: replayObj.version,
-    finalStep: replayObj.finalStep,
-    events,
-    seed: replayObj.seed,
-    wrapAround: config?.wrapAround,
-    practiceMode: config?.practiceMode
-  };
-};
-
 const summarizePayload = (payload: unknown) => {
   if (!payload || typeof payload !== 'object') return payload;
   const body = payload as UnknownRecord;
@@ -34,8 +18,7 @@ const summarizePayload = (payload: unknown) => {
     difficulty: body.difficulty,
     mode: body.mode,
     wrapAround: body.wrapAround,
-    practiceMode: body.practiceMode,
-    replay: summarizeReplay(body.replay)
+    practiceMode: body.practiceMode
   };
 };
 
@@ -76,17 +59,6 @@ export async function POST(req: NextRequest) {
     console.info('[scores][POST] Received score payload.', summarizePayload(payload));
 
     const saved = await saveScore(payload as ScoreSubmission);
-
-    console.info('[scores][POST] Normalized score payload ready for persistence.', {
-      name: saved.name,
-      score: saved.score,
-      length: saved.length,
-      difficulty: saved.difficulty,
-      mode: saved.mode,
-      wrapAround: saved.wrapAround,
-      practiceMode: saved.practiceMode,
-      replay: summarizeReplay(saved.replay)
-    });
 
     const scores = await getScores(50);
     const rank = scores.findIndex((entry) =>

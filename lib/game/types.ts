@@ -31,19 +31,6 @@ export interface GameState {
   seed: number;
 }
 
-export interface InputEvent {
-  step: number;
-  direction: Direction;
-}
-
-export interface ReplayLog {
-  version: 1;
-  seed: number;
-  config: GameConfig;
-  events: InputEvent[];
-  finalStep?: number;
-}
-
 export interface ScoreEntry {
   id?: number;
   name?: string;
@@ -53,6 +40,5 @@ export interface ScoreEntry {
   mode: ThemeMode;
   wrapAround: boolean;
   practiceMode: boolean;
-  replay: ReplayLog;
   created_at: string;
 }

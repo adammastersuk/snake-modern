@@ -4,7 +4,7 @@ import { PwaRegister } from '@/components/PwaRegister';
 
 export const metadata: Metadata = {
   title: 'Snake Modern',
-  description: 'Modern, Retro, Masters Build, and 3D deterministic snake with replay system',
+  description: 'Modern, Retro, Masters Build, and 3D deterministic snake with reliable leaderboard scoring',
   manifest: '/manifest.webmanifest',
   appleWebApp: {
     capable: true,

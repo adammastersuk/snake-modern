@@ -6,18 +6,16 @@ import { KeyHints } from '@/components/KeyHints';
 import { LeaderboardPanel } from '@/components/LeaderboardPanel';
 import { MobileControls } from '@/components/MobileControls';
 import { MobileDrawer } from '@/components/MobileDrawer';
-import { ReplayPanel } from '@/components/ReplayPanel';
 import { SettingsPanel } from '@/components/SettingsPanel';
 import { StartOverlay } from '@/components/StartOverlay';
 import { Toast } from '@/components/Toast';
 import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion';
 import { buildGameConfig } from '@/lib/game/difficulty';
-import { compressReplay, exportReplay, importReplay } from '@/lib/game/replay';
+import { createFinalRunSnapshot, FinalRunSnapshot, resolveSubmittedScore } from '@/lib/game/finalRun';
 import { createSeed, SeededRng } from '@/lib/game/rng';
 import { isTypingTarget } from '@/lib/game/keyboard';
-import { buildReplay, buildReplayFrames, createInitialState, enqueueDirection, stepGame } from '@/lib/game/simulation';
-import { resolveSubmittedScore } from '@/lib/game/submission';
-import { Difficulty, Direction, InputEvent, ScoreEntry, ThemeMode } from '@/lib/game/types';
+import { createInitialState, enqueueDirection, stepGame } from '@/lib/game/simulation';
+import { Difficulty, Direction, ScoreEntry, ThemeMode } from '@/lib/game/types';
 import { THEME_SURFACES, THEME_TITLES } from '@/lib/theme';
 
 const DEFAULT_TILE = 22;
@@ -26,16 +24,6 @@ const MAX_PLAYER_NAME_LENGTH = 20;
 interface SubmitFeedback {
   status: 'idle' | 'submitting' | 'success' | 'error';
   message: string;
-}
-
-interface FinalRunSnapshot {
-  score: number;
-  length: number;
-  difficulty: Difficulty;
-  mode: ThemeMode;
-  wrapAround: boolean;
-  practiceMode: boolean;
-  replay: ReturnType<typeof buildReplay>;
 }
 
 interface SubmissionResult {
@@ -57,8 +45,6 @@ export default function Home() {
   const [running, setRunning] = useState(false);
   const [best, setBest] = useState(0);
   const [scores, setScores] = useState<ScoreEntry[]>([]);
-  const [replayFrames, setReplayFrames] = useState<ReturnType<typeof buildReplayFrames>>([]);
-  const [replayFrame, setReplayFrame] = useState(0);
   const [isMobile, setIsMobile] = useState(false);
   const [mobileFooterHeight, setMobileFooterHeight] = useState(0);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -79,13 +65,7 @@ export default function Home() {
   const stateRef = useRef(uiState);
   const queueRef = useRef<Direction[]>([]);
   const rngRef = useRef(new SeededRng(uiState.seed));
-  const replaySeedRef = useRef(uiState.seed);
-  const eventsRef = useRef<InputEvent[]>([]);
   const surface = THEME_SURFACES[theme];
-
-  const replayLog = useMemo(() => buildReplay(replaySeedRef.current, config, eventsRef.current, stateRef.current.step), [uiState.step, config]);
-  const replayJson = useMemo(() => exportReplay(replayLog), [replayLog]);
-  const replayLink = useMemo(() => `?replay=${encodeURIComponent(compressReplay(replayLog))}`, [replayLog]);
 
 
   const refreshScores = useCallback(async () => {
@@ -97,14 +77,10 @@ export default function Home() {
     const next = createInitialState(seed, config);
     stateRef.current = next;
     rngRef.current = new SeededRng(next.seed);
-    replaySeedRef.current = next.seed;
     queueRef.current = [];
-    eventsRef.current = [];
     setPaused(true);
     setRunning(false);
     setUiState({ ...next, snake: [...next.snake] });
-    setReplayFrames([]);
-    setReplayFrame(0);
     setSubmitFeedback({ status: 'idle', message: '' });
     setFinalRun(null);
     setSubmissionResult(null);
@@ -118,22 +94,6 @@ export default function Home() {
     sync();
     media.addEventListener('change', sync);
     return () => media.removeEventListener('change', sync);
-  }, []);
-
-  useEffect(() => {
-    const incoming = new URLSearchParams(window.location.search).get('replay');
-    if (incoming) {
-      try {
-        const replay = importReplay(incoming);
-        setReplayFrames(buildReplayFrames(replay));
-        setReplayFrame(0);
-        setPaused(true);
-        setRunning(false);
-        setToast('Loaded replay from link');
-      } catch {
-        setToast('Unable to load replay link');
-      }
-    }
   }, []);
 
   useEffect(() => {
@@ -152,7 +112,6 @@ export default function Home() {
   useEffect(() => localStorage.setItem('snake-haptics', hapticsEnabled ? '1' : '0'), [hapticsEnabled]);
   const input = useCallback((dir: Direction) => {
     enqueueDirection(queueRef.current, stateRef.current, dir);
-    eventsRef.current.push({ step: stateRef.current.step, direction: dir });
   }, []);
 
   useEffect(() => {
@@ -187,21 +146,17 @@ export default function Home() {
 
   const endGame = useCallback(() => {
     const finalState = stateRef.current;
-    const replay = buildReplay(replaySeedRef.current, config, eventsRef.current, finalState.step);
-    const snapshot: FinalRunSnapshot = {
-      score: finalState.score,
-      length: finalState.snake.length,
+    const snapshot = createFinalRunSnapshot(finalState, {
       difficulty,
       mode: theme,
       wrapAround,
-      practiceMode,
-      replay
-    };
+      practiceMode
+    });
 
     setFinalRun(snapshot);
     setPaused(true);
     setRunning(false);
-  }, [config, difficulty, practiceMode, theme, wrapAround]);
+  }, [difficulty, practiceMode, theme, wrapAround]);
 
   useEffect(() => {
     const target = canvasRef.current;
@@ -326,7 +281,7 @@ export default function Home() {
       accumulator += dt;
       const frameMs = 1000 / stateRef.current.speed;
       while (accumulator >= frameMs) {
-          if (!paused && running && replayFrames.length === 0) {
+          if (!paused && running) {
             stepGame(stateRef.current, config, queueRef.current, rngRef.current);
             if (!stateRef.current.alive) {
               endGame();
@@ -334,14 +289,13 @@ export default function Home() {
         }
         accumulator -= frameMs;
       }
-      const frame = replayFrames.length > 0 ? (replayFrames[replayFrame] ?? replayFrames.at(-1)) : stateRef.current;
-      if (frame) draw(canvasRef.current, frame, theme, canvasMetrics.tile * canvasMetrics.dpr);
+      draw(canvasRef.current, stateRef.current, theme, canvasMetrics.tile * canvasMetrics.dpr);
       setUiState({ ...stateRef.current, snake: [...stateRef.current.snake] });
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [config, paused, running, replayFrames, replayFrame, theme, canvasMetrics, endGame]);
+  }, [config, paused, running, theme, canvasMetrics, endGame]);
 
   useEffect(() => {
     if (!uiState.alive && uiState.score > best) {
@@ -349,19 +303,6 @@ export default function Home() {
       localStorage.setItem('snake-best', String(uiState.score));
     }
   }, [uiState.alive, uiState.score, best]);
-
-  const loadReplay = (raw: string) => {
-    try {
-      const cleaned = raw.trim();
-      let payload = cleaned;
-      if (/^https?:\/\//i.test(cleaned)) payload = new URL(cleaned).searchParams.get('replay') ?? cleaned;
-      setReplayFrames(buildReplayFrames(importReplay(payload)));
-      setReplayFrame(0);
-      setPaused(true);
-      setRunning(false);
-      setToast('Replay loaded');
-    } catch { setToast('Invalid replay'); }
-  };
 
   const submitScore = async () => {
     const candidate = finalRun;
@@ -385,7 +326,7 @@ export default function Home() {
       return;
     }
 
-    setSubmitFeedback({ status: 'submitting', message: 'Submitting replay-backed score…' });
+    setSubmitFeedback({ status: 'submitting', message: 'Submitting score…' });
     setSubmissionResult(null);
 
     const payload = {
@@ -395,8 +336,7 @@ export default function Home() {
       difficulty: candidate.difficulty,
       mode: candidate.mode,
       wrapAround: candidate.wrapAround,
-      practiceMode: candidate.practiceMode,
-      replay: candidate.replay
+      practiceMode: candidate.practiceMode
     };
 
     const res = await fetch('/api/scores', {
@@ -422,7 +362,7 @@ export default function Home() {
 
     let persistedScore = candidate.score;
     try {
-      persistedScore = resolveSubmittedScore(candidate.score, data.score);
+      persistedScore = resolveSubmittedScore(candidate, data.score);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Submitted score did not match final run score.';
       setSubmitFeedback({ status: 'error', message });
@@ -508,8 +448,7 @@ export default function Home() {
         </section>
         <aside className="hidden space-y-3 lg:sticky lg:top-4 lg:block lg:h-fit">
           <SettingsPanel theme={theme} difficulty={difficulty} wrapAround={wrapAround} practiceMode={practiceMode} showDpad={showDpad} paused={paused} onThemeChange={setTheme} onDifficultyChange={setDifficulty} onWrapChange={setWrapAround} onPracticeModeChange={setPracticeMode} onShowDpadChange={setShowDpad} onPauseToggle={() => setPaused((p) => !p)} onRestart={() => restartGame()} />
-          <ReplayPanel replayJson={replayJson} replayLink={replayLink} replayFrame={replayFrame} replayFrameMax={Math.max(0, replayFrames.length - 1)} onImport={loadReplay} onFrameChange={setReplayFrame} theme={theme} />
-          <LeaderboardPanel scores={scores} onWatchReplay={loadReplay} theme={theme} />
+          <LeaderboardPanel scores={scores} theme={theme} />
         </aside>
       </div>
 
@@ -519,13 +458,12 @@ export default function Home() {
           <div className={`rounded-2xl border p-3 ${surface.panel}`}>
             <label className="flex items-center justify-between gap-2 text-sm"><span>Haptic feedback</span><input type="checkbox" checked={hapticsEnabled} onChange={(e) => setHapticsEnabled(e.target.checked)} aria-label="Toggle haptic feedback" /></label>
           </div>
-          <ReplayPanel replayJson={replayJson} replayLink={replayLink} replayFrame={replayFrame} replayFrameMax={Math.max(0, replayFrames.length - 1)} onImport={loadReplay} onFrameChange={setReplayFrame} theme={theme} />
         </div>
       </MobileDrawer>
 
       <MobileDrawer open={leaderboardOpen} title="Leaderboard" onClose={() => setLeaderboardOpen(false)} theme={theme}>
         <div data-mobile-drawer-scroll="true" className="space-y-3">
-          <LeaderboardPanel scores={scores} onWatchReplay={loadReplay} theme={theme} />
+          <LeaderboardPanel scores={scores} theme={theme} />
         </div>
       </MobileDrawer>
 

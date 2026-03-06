@@ -1,6 +1,6 @@
 # Snake Modern (Next.js 14)
 
-Production-ready Snake built with Next.js App Router, TypeScript, Tailwind, deterministic simulation, replay sharing, and optional leaderboard persistence.
+Production-ready Snake built with Next.js App Router, TypeScript, Tailwind, deterministic simulation, and optional leaderboard persistence.
 
 ## Themes
 
@@ -28,10 +28,7 @@ Theme switching updates title, panels, controls, overlays, and canvas rendering 
 - **Advanced systems**:
   - difficulty presets: Casual / Classic / Hardcore
   - practice mode (disables self collision)
-  - replay export (JSON) and import (JSON or compressed)
-  - deterministic replay playback
-  - shareable replay links via `?replay=`
-  - replay timeline scrubber
+  - frozen final-run snapshot for score submission
 - **Mobile**:
   - swipe input on the canvas
   - optional on-screen D-pad
@@ -39,7 +36,7 @@ Theme switching updates title, panels, controls, overlays, and canvas rendering 
 - **Leaderboard**:
   - `GET /api/scores`
   - `POST /api/scores`
-  - replay verification before accepting score
+  - persists submitted final score directly
   - uses Neon Postgres via Vercel Marketplace env vars when available; otherwise in-memory fallback
 - **PWA install support**:
   - web manifest (`app/manifest.ts`)
@@ -64,16 +61,6 @@ This project uses **Neon Postgres** through the **Vercel Marketplace integration
 - Start / Pause: `Space`
 - Restart: `R`
 - Mobile: swipe and optional D-pad
-
-## Replay system
-
-A replay stores:
-- RNG seed
-- game config
-- input events (`step + direction`)
-- final step
-
-This allows deterministic reconstruction of a run. Replays can be shared through the `?replay=` query parameter using compressed base64url payloads.
 
 ## PWA install notes
 
@@ -101,7 +88,7 @@ npm run build
 Includes Vitest coverage for:
 - simulation determinism
 - difficulty presets
-- replay compression round-trip
+- submission/final-run score consistency
 
 ## Deployment (Vercel)
 
@@ -122,11 +109,16 @@ CREATE TABLE IF NOT EXISTS scores (
   length INTEGER NOT NULL,
   difficulty TEXT NOT NULL,
   mode TEXT NOT NULL,
-  wrapAround BOOLEAN NOT NULL,
-  practiceMode BOOLEAN NOT NULL,
-  replay JSONB NOT NULL,
+  wrap_around BOOLEAN NOT NULL,
+  practice_mode BOOLEAN NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_scores_rank ON scores (score DESC, created_at DESC);
+```
+
+Optional cleanup after migration to replay-free submissions:
+
+```sql
+ALTER TABLE scores DROP COLUMN IF EXISTS replay;
 ```
