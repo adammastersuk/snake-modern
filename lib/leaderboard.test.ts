@@ -3,7 +3,7 @@ import { buildGameConfig } from '@/lib/game/difficulty';
 import { SeededRng } from '@/lib/game/rng';
 import { buildReplay, createInitialState, enqueueDirection, simulateReplay, stepGame } from '@/lib/game/simulation';
 import { Direction, ReplayLog } from '@/lib/game/types';
-import { validateScore } from '@/lib/leaderboard';
+import { __testables, validateScore } from '@/lib/leaderboard';
 
 const dirs: Direction[] = ['up', 'down', 'left', 'right'];
 
@@ -49,6 +49,11 @@ const buildScoringReplay = (): ReplayLog => {
 };
 
 describe('leaderboard replay validation', () => {
+  it('detects short wrap/practice score columns', () => {
+    const columns = __testables.resolveScoreColumnsFromNames(new Set(['id', 'wrap', 'practice']));
+    expect(columns).toEqual({ wrap: 'wrap', practice: 'practice', variant: 'short' });
+  });
+
   it('rejects replay without final step metadata', () => {
     const replay = buildScoringReplay();
     const { finalStep, ...withoutFinalStep } = replay;
@@ -85,5 +90,22 @@ describe('leaderboard replay validation', () => {
     expect(validated.length).toBe(simulated.snake.length);
     expect(validated.wrapAround).toBe(replay.config.wrapAround);
     expect(validated.practiceMode).toBe(replay.config.practiceMode);
+  });
+
+  it('rejects names longer than 20 chars', () => {
+    const replay = buildScoringReplay();
+
+    expect(() =>
+      validateScore({
+        score: 1,
+        length: 2,
+        difficulty: 'classic',
+        mode: 'modern',
+        wrapAround: false,
+        practiceMode: false,
+        replay,
+        name: '123456789012345678901'
+      })
+    ).toThrow('Name must be 20 characters or fewer.');
   });
 });
