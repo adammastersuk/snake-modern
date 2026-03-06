@@ -1,11 +1,20 @@
-# Modern Snake (Next.js 14)
+# Snake Modern (Next.js 14)
 
 Production-ready Snake built with Next.js App Router, TypeScript, Tailwind, deterministic simulation, replay sharing, and optional leaderboard persistence.
 
+## Themes
+
+The game ships with 4 fully styled themes, each with a distinct board renderer and UI system:
+
+- **Modern**: premium neon-glass aesthetic, refined gradients, glow-driven HUD and controls.
+- **Retro**: arcade style with CRT scanlines, pixel-ish UI treatment, stronger contrast, and retro snake/food rendering.
+- **Masters Build**: restrained editorial look with minimal premium surfaces designed for showcase polish.
+- **3D**: performant faux-3D canvas treatment using depth shading, highlights, shadow faces, and tiled depth cues.
+
+Theme switching updates title, panels, controls, overlays, and canvas rendering while preserving deterministic gameplay.
+
 ## Features
 
-- **Modern mode**: gradient neon glow + subtle ambient background animation.
-- **Retro mode**: pixel grid, CRT scanlines, retro font.
 - **Deterministic engine**:
   - fixed timestep simulation
   - seeded pseudo-random generation
@@ -26,11 +35,16 @@ Production-ready Snake built with Next.js App Router, TypeScript, Tailwind, dete
 - **Mobile**:
   - swipe input on the canvas
   - optional on-screen D-pad
+  - mobile settings drawer with focus trap
 - **Leaderboard**:
   - `GET /api/scores`
   - `POST /api/scores`
   - replay verification before accepting score
   - uses `POSTGRES_URL` when available; otherwise in-memory fallback
+- **PWA install support**:
+  - web manifest (`app/manifest.ts`)
+  - home screen metadata + icons
+  - lightweight service worker shell cache (`public/sw.js`)
 
 ## Controls
 
@@ -49,6 +63,13 @@ A replay stores:
 
 This allows deterministic reconstruction of a run. Replays can be shared through the `?replay=` query parameter using compressed base64url payloads.
 
+## PWA install notes
+
+- Open the deployed app in a mobile browser that supports install prompts.
+- Use **Add to Home Screen** / install from browser UI.
+- App launches in standalone mode with configured theme/background colors.
+- Service worker provides a lightweight cached shell for basic offline revisit behavior.
+
 ## Development
 
 ```bash
@@ -62,6 +83,7 @@ Open http://localhost:3000.
 
 ```bash
 npm run test
+npm run build
 ```
 
 Includes Vitest coverage for:
@@ -71,7 +93,7 @@ Includes Vitest coverage for:
 
 ## Deployment (Vercel)
 
-This app is ready for Vercel deployment with no unsupported Next config.
+This app is ready for Vercel deployment.
 
 1. Push repository.
 2. Import project in Vercel.
@@ -97,25 +119,3 @@ CREATE TABLE IF NOT EXISTS scores (
 
 CREATE INDEX IF NOT EXISTS idx_scores_rank ON scores (score DESC, created_at DESC);
 ```
-
-## Mobile play mode + controls
-
-Mobile now uses a dedicated play mode designed to keep controls reachable without scrolling:
-
-- A fixed bottom controls bar keeps D-pad + Pause/Restart in thumb range.
-- The game board area uses touch-action safeguards so touch gestures control Snake instead of the browser page.
-- Secondary panels (Settings, Replay, Leaderboard) move into a mobile bottom drawer opened via **Panels**.
-- Opening the drawer pauses the run and traps focus in the drawer; closing it restores the previous pause state.
-- Safe-area insets are respected for iOS (`env(safe-area-inset-bottom)`).
-- Optional haptic feedback for D-pad presses is available from the mobile Panels drawer.
-
-### Mobile sizing checklist
-
-Use this checklist when testing small screens (e.g. 375px width and below):
-
-- [ ] No horizontal page scrolling.
-- [ ] Canvas fits viewport width and stays centered.
-- [ ] D-pad / controls bar always visible without vertical scrolling.
-- [ ] Touching canvas or controls does not trigger pull-to-refresh / accidental page scroll.
-- [ ] Panels drawer opens/closes correctly; internal drawer content scrolls.
-- [ ] Replay link export/import still functions from the mobile drawer.
