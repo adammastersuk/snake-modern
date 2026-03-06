@@ -2,8 +2,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getScores, saveScore } from '@/lib/leaderboard';
 
 export async function GET() {
-  const scores = await getScores(50);
-  return NextResponse.json({ scores });
+  try {
+    const scores = await getScores(50);
+    return NextResponse.json({ scores });
+  } catch (error) {
+    console.error('[scores][GET] Failed to load scores.', error);
+    return NextResponse.json(
+      { scores: [], error: error instanceof Error ? error.message : 'Failed to load scores' },
+      { status: 500 }
+    );
+  }
 }
 
 export async function POST(req: NextRequest) {
@@ -26,6 +34,7 @@ export async function POST(req: NextRequest) {
       scores
     });
   } catch (error) {
+    console.error('[scores][POST] Failed to save score.', error);
     return NextResponse.json(
       { ok: false, error: error instanceof Error ? error.message : 'Invalid payload' },
       { status: 400 }

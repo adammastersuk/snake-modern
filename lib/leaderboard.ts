@@ -1,4 +1,4 @@
-import { query } from '@/lib/db';
+import { hasDatabaseConfig, query } from '@/lib/db';
 import { simulateReplay } from '@/lib/game/simulation';
 import { Difficulty, ReplayLog, ScoreEntry, ThemeMode } from '@/lib/game/types';
 
@@ -188,7 +188,11 @@ export const getScores = async (limit = 20): Promise<ScoreEntry[]> => {
       LIMIT ${limit}
     `;
     return rows.map(normalizeRow);
-  } catch {
+  } catch (error) {
+    console.error('[leaderboard] Failed to fetch scores from database.', error);
+    if (hasDatabaseConfig()) {
+      throw new Error('Failed to fetch leaderboard scores from database.');
+    }
     return memoryStore.slice(0, limit);
   }
 };
@@ -220,7 +224,11 @@ export const saveScore = async (entry: ScoreSubmission) => {
       VALUES (${validated.name ?? null}, ${validated.score}, ${validated.length}, ${validated.difficulty}, ${validated.mode}, ${validated.wrapAround}, ${validated.practiceMode}, ${JSON.stringify(validated.replay)})
     `;
     return validated;
-  } catch {
+  } catch (error) {
+    console.error('[leaderboard] Failed to persist score in database.', error);
+    if (hasDatabaseConfig()) {
+      throw new Error('Failed to persist score in database.');
+    }
     memoryStore.unshift({ ...validated, created_at: new Date().toISOString() });
     return validated;
   }

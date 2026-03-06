@@ -70,7 +70,7 @@ export function LeaderboardPanel({
               <button className={`text-xs underline ${surface.textMuted}`} onClick={() => onWatchReplay(JSON.stringify(score.replay))}>Watch replay</button>
             </div>
             <p className={`mt-1 text-xs ${surface.textMuted}`}>
-              Len {score.length} · {difficultyLabel[score.difficulty]} · {THEME_TITLES[score.mode]} · {score.practiceMode ? 'Practice' : 'Standard'}
+              {score.name ? `${score.name} · ` : ''}Len {score.length} · {difficultyLabel[score.difficulty]} · {THEME_TITLES[score.mode]} · {score.practiceMode ? 'Practice' : 'Standard'}
             </p>
             <p className={`text-xs ${surface.textMuted}`}>{new Date(score.created_at).toLocaleString()}</p>
           </div>
