@@ -1,4 +1,5 @@
 import { Difficulty, ThemeMode } from '@/lib/game/types';
+import { THEME_OPTIONS, THEME_SURFACES } from '@/lib/theme';
 
 interface Props {
   theme: ThemeMode;
@@ -17,19 +18,33 @@ interface Props {
 }
 
 export function SettingsPanel(p: Props) {
+  const surface = THEME_SURFACES[p.theme];
   return (
-    <aside className="space-y-3 rounded-2xl border border-white/15 bg-black/25 p-4">
+    <aside className={`space-y-3 rounded-2xl border p-4 ${surface.panel}`}>
       <h2 className="font-semibold">Settings</h2>
 
-      <OptionGroup
-        label="Theme"
-        value={p.theme}
-        options={[
-          { value: 'modern', label: 'Modern' },
-          { value: 'retro', label: 'Retro' }
-        ]}
-        onChange={(value) => p.onThemeChange(value as ThemeMode)}
-      />
+      <fieldset>
+        <legend className="mb-2 text-sm">Theme</legend>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          {THEME_OPTIONS.map((option) => {
+            const active = option.value === p.theme;
+            return (
+              <button
+                key={option.value}
+                type="button"
+                role="radio"
+                aria-checked={active}
+                onClick={() => p.onThemeChange(option.value)}
+                className={`rounded-xl border p-2.5 text-left transition ${active ? surface.badge : surface.softPanel}`}
+              >
+                <div className={`mb-1 h-5 rounded-md bg-gradient-to-r ${option.swatch}`} />
+                <p className="text-sm font-semibold">{option.label}</p>
+                <p className={`text-xs ${surface.textMuted}`}>{option.subtitle}</p>
+              </button>
+            );
+          })}
+        </div>
+      </fieldset>
 
       <OptionGroup
         label="Difficulty"
@@ -39,18 +54,20 @@ export function SettingsPanel(p: Props) {
           { value: 'classic', label: 'Classic' },
           { value: 'hardcore', label: 'Hardcore' }
         ]}
+        activeClass={surface.badge}
+        idleClass={surface.softPanel}
         onChange={(value) => p.onDifficultyChange(value as Difficulty)}
       />
 
-      <Toggle label="Wrap-around" checked={p.wrapAround} onChange={p.onWrapChange} />
-      <Toggle label="Practice mode" checked={p.practiceMode} onChange={p.onPracticeModeChange} />
-      <Toggle label="On-screen D-pad" checked={p.showDpad} onChange={p.onShowDpadChange} />
+      <Toggle label="Wrap-around" checked={p.wrapAround} onChange={p.onWrapChange} mutedClass={surface.textMuted} />
+      <Toggle label="Practice mode" checked={p.practiceMode} onChange={p.onPracticeModeChange} mutedClass={surface.textMuted} />
+      <Toggle label="On-screen D-pad" checked={p.showDpad} onChange={p.onShowDpadChange} mutedClass={surface.textMuted} />
 
       <div className="grid grid-cols-2 gap-2">
-        <button onClick={p.onPauseToggle} className="rounded-lg bg-indigo-500 px-3 py-2 text-sm font-semibold">
+        <button onClick={p.onPauseToggle} className={`rounded-lg border px-3 py-2 text-sm font-semibold ${surface.buttonPrimary}`}>
           {p.paused ? 'Resume' : 'Pause'}
         </button>
-        <button onClick={p.onRestart} className="rounded-lg bg-rose-500 px-3 py-2 text-sm font-semibold">
+        <button onClick={p.onRestart} className={`rounded-lg border px-3 py-2 text-sm font-semibold ${surface.buttonDanger}`}>
           Restart
         </button>
       </div>
@@ -62,12 +79,16 @@ function OptionGroup({
   label,
   value,
   options,
-  onChange
+  onChange,
+  activeClass,
+  idleClass
 }: {
   label: string;
   value: string;
   options: { value: string; label: string }[];
   onChange: (value: string) => void;
+  activeClass: string;
+  idleClass: string;
 }) {
   return (
     <fieldset>
@@ -82,9 +103,7 @@ function OptionGroup({
               role="radio"
               aria-checked={active}
               onClick={() => onChange(option.value)}
-              className={`min-h-11 rounded-lg border px-2 py-1 text-sm transition ${
-                active ? 'border-cyan-300/70 bg-cyan-500/30 text-white' : 'border-white/20 bg-white/10 text-slate-100'
-              }`}
+              className={`min-h-11 rounded-lg border px-2 py-1 text-sm transition ${active ? activeClass : idleClass}`}
             >
               {option.label}
             </button>
@@ -95,10 +114,10 @@ function OptionGroup({
   );
 }
 
-function Toggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
+function Toggle({ label, checked, onChange, mutedClass }: { label: string; checked: boolean; onChange: (v: boolean) => void; mutedClass: string }) {
   return (
     <label className="flex items-center justify-between gap-2 text-sm">
-      <span>{label}</span>
+      <span className={mutedClass}>{label}</span>
       <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
     </label>
   );

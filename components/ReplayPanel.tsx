@@ -1,6 +1,8 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { ThemeMode } from '@/lib/game/types';
+import { THEME_SURFACES } from '@/lib/theme';
 
 interface Props {
   replayJson: string;
@@ -9,11 +11,13 @@ interface Props {
   replayFrameMax: number;
   onImport: (text: string) => void;
   onFrameChange: (v: number) => void;
+  theme: ThemeMode;
 }
 
-export function ReplayPanel({ replayJson, replayLink, replayFrame, replayFrameMax, onImport, onFrameChange }: Props) {
+export function ReplayPanel({ replayJson, replayLink, replayFrame, replayFrameMax, onImport, onFrameChange, theme }: Props) {
   const [value, setValue] = useState('');
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const surface = THEME_SURFACES[theme];
   const shareUrl = useMemo(() => {
     if (typeof window === 'undefined') return replayLink;
     return `${window.location.origin}${replayLink}`;
@@ -25,36 +29,31 @@ export function ReplayPanel({ replayJson, replayLink, replayFrame, replayFrameMa
   };
 
   return (
-    <section className="space-y-3 rounded-2xl border border-white/15 bg-black/25 p-4">
+    <section className={`space-y-3 rounded-2xl border p-4 ${surface.panel}`}>
       <div className="flex items-center justify-between gap-2">
         <h2 className="font-semibold">Replay</h2>
-        <button type="button" className="rounded-lg border border-white/20 px-2.5 py-1 text-xs" onClick={() => setShowAdvanced((v) => !v)}>
+        <button type="button" className={`rounded-lg border px-2.5 py-1 text-xs ${surface.buttonGhost}`} onClick={() => setShowAdvanced((v) => !v)}>
           {showAdvanced ? 'Simple view' : 'Advanced'}
         </button>
       </div>
 
-      <p className="text-xs text-slate-300/90">Share your run with one link. Friends can open it directly and watch the replay.</p>
+      <p className={`text-xs ${surface.textMuted}`}>Share your run with one link. Friends can open it directly and watch the replay.</p>
 
       <div className="grid grid-cols-2 gap-2">
-        <a href={replayLink} className="rounded-lg bg-cyan-600 px-3 py-2 text-center text-sm font-medium">Open share link</a>
-        <button type="button" className="rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-sm font-medium" onClick={() => void copyShareLink()}>
+        <a href={replayLink} className={`rounded-lg border px-3 py-2 text-center text-sm font-medium ${surface.buttonPrimary}`}>Open share link</a>
+        <button type="button" className={`rounded-lg border px-3 py-2 text-sm font-medium ${surface.buttonGhost}`} onClick={() => void copyShareLink()}>
           Copy link
         </button>
       </div>
 
       <label className="block text-xs">Paste replay link or code
-        <input
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          placeholder="Paste shared URL, compressed code, or JSON"
-          className="mt-1 w-full rounded bg-black/35 p-2 text-xs"
-        />
+        <input value={value} onChange={(e) => setValue(e.target.value)} placeholder="Paste shared URL, compressed code, or JSON" className={`mt-1 w-full rounded border p-2 text-xs ${surface.softPanel}`} />
       </label>
-      <button className="rounded bg-emerald-500 px-3 py-1.5 text-sm" onClick={() => onImport(value.trim())}>Load replay</button>
+      <button className={`rounded-lg border px-3 py-1.5 text-sm ${surface.buttonPrimary}`} onClick={() => onImport(value.trim())}>Load replay</button>
 
       {showAdvanced && (
         <label className="block text-xs">Raw replay JSON (advanced)
-          <textarea readOnly value={replayJson} className="mt-1 h-24 w-full rounded bg-black/35 p-2 text-xs" />
+          <textarea readOnly value={replayJson} className={`mt-1 h-24 w-full rounded border p-2 text-xs ${surface.softPanel}`} />
         </label>
       )}
 

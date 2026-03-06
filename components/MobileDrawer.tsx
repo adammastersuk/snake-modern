@@ -1,17 +1,21 @@
 'use client';
 
 import { ReactNode, useEffect, useRef } from 'react';
+import { ThemeMode } from '@/lib/game/types';
+import { THEME_SURFACES } from '@/lib/theme';
 
 interface MobileDrawerProps {
   open: boolean;
   title: string;
   onClose: () => void;
   children: ReactNode;
+  theme: ThemeMode;
 }
 
-export function MobileDrawer({ open, title, onClose, children }: MobileDrawerProps) {
+export function MobileDrawer({ open, title, onClose, children, theme }: MobileDrawerProps) {
   const sheetRef = useRef<HTMLDivElement>(null);
   const startYRef = useRef<number | null>(null);
+  const surface = THEME_SURFACES[theme];
 
   useEffect(() => {
     if (!open) return;
@@ -47,10 +51,7 @@ export function MobileDrawer({ open, title, onClose, children }: MobileDrawerPro
   return (
     <div className="fixed inset-0 z-[70] md:hidden" aria-modal="true" role="dialog" aria-label={title}>
       <div className="absolute inset-0 bg-black/55" aria-hidden="true" onClick={onClose} />
-      <div
-        ref={sheetRef}
-        className="absolute bottom-0 left-0 right-0 max-h-[78vh] w-full max-w-full rounded-t-3xl border-t border-white/15 bg-slate-950/95 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-2xl"
-      >
+      <div ref={sheetRef} className={`absolute bottom-0 left-0 right-0 max-h-[78vh] w-full max-w-full rounded-t-3xl border-t p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-2xl ${surface.drawer}`}>
         <button
           type="button"
           className="mx-auto mb-3 block h-3 w-20 rounded-full bg-transparent"
@@ -69,9 +70,7 @@ export function MobileDrawer({ open, title, onClose, children }: MobileDrawerPro
         </button>
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-base font-semibold">{title}</h2>
-          <button className="rounded-lg border border-white/20 px-3 py-1.5 text-sm" onClick={onClose}>
-            Close
-          </button>
+          <button className={`rounded-lg border px-3 py-1.5 text-sm ${surface.buttonGhost}`} onClick={onClose}>Close</button>
         </div>
         <div className="max-h-[62vh] overflow-y-auto pr-1">{children}</div>
       </div>
