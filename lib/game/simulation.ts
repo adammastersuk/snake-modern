@@ -95,8 +95,8 @@ export const stepGame = (state: GameState, config: GameConfig, queue: Direction[
 export const buildReplay = (seed: number, config: GameConfig, events: ReplayLog['events'], finalStep: number): ReplayLog => ({
   version: 1,
   seed,
-  config,
-  events,
+  config: { ...config },
+  events: events.map((event) => ({ ...event })),
   finalStep
 });
 

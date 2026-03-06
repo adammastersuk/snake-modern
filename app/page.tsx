@@ -14,7 +14,9 @@ import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion';
 import { buildGameConfig } from '@/lib/game/difficulty';
 import { compressReplay, exportReplay, importReplay } from '@/lib/game/replay';
 import { createSeed, SeededRng } from '@/lib/game/rng';
+import { isTypingTarget } from '@/lib/game/keyboard';
 import { buildReplay, buildReplayFrames, createInitialState, enqueueDirection, stepGame } from '@/lib/game/simulation';
+import { resolveSubmittedScore } from '@/lib/game/submission';
 import { Difficulty, Direction, InputEvent, ScoreEntry, ThemeMode } from '@/lib/game/types';
 import { THEME_SURFACES, THEME_TITLES } from '@/lib/theme';
 
@@ -155,7 +157,18 @@ export default function Home() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const map: Record<string, Direction> = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right', w: 'up', a: 'left', s: 'down', d: 'right' };
+      if (isTypingTarget(e.target as HTMLElement | null)) return;
+
+      const map: Record<string, Direction> = {
+        ArrowUp: 'up',
+        ArrowDown: 'down',
+        ArrowLeft: 'left',
+        ArrowRight: 'right',
+        w: 'up',
+        a: 'left',
+        s: 'down',
+        d: 'right'
+      };
       const dir = map[e.key];
       if (dir) {
         e.preventDefault();
@@ -407,7 +420,17 @@ export default function Home() {
       await refreshScores();
     }
 
-    const persistedScore = typeof data.score === 'number' ? data.score : candidate.score;
+    let persistedScore = candidate.score;
+    try {
+      persistedScore = resolveSubmittedScore(candidate.score, data.score);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Submitted score did not match final run score.';
+      setSubmitFeedback({ status: 'error', message });
+      setToast('Score mismatch');
+      await refreshScores();
+      return;
+    }
+
     const rank = typeof data.rank === 'number' ? data.rank : null;
     const rankText = rank ? ` • Rank #${rank}` : '';
     const success = `Score submitted (${persistedScore})${rankText}`;
