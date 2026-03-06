@@ -51,7 +51,7 @@ const buildScoringReplay = (): ReplayLog => {
 describe('leaderboard replay validation', () => {
   it('detects short wrap/practice score columns', () => {
     const columns = __testables.resolveScoreColumnsFromNames(new Set(['id', 'wrap', 'practice']));
-    expect(columns).toEqual({ wrap: 'wrap', practice: 'practice', variant: 'short' });
+    expect(columns).toEqual({ schema: 'public', wrap: 'wrap', practice: 'practice', variant: 'short' });
   });
 
   it('rejects replay without final step metadata', () => {

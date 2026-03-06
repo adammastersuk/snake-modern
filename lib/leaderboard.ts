@@ -21,6 +21,7 @@ interface ScoreRow {
 export type ScoreColumnVariant = 'snake_case' | 'collapsed' | 'camelCase' | 'short';
 
 interface ScoreColumns {
+  schema: string;
   wrap: string;
   practice: string;
   variant: ScoreColumnVariant;
@@ -60,19 +61,19 @@ export interface ScoreSubmission {
 
 const resolveScoreColumnsFromNames = (names: Set<string>): ScoreColumns | null => {
   if (names.has('wrap_around') && names.has('practice_mode')) {
-    return { wrap: 'wrap_around', practice: 'practice_mode', variant: 'snake_case' };
+    return { schema: 'public', wrap: 'wrap_around', practice: 'practice_mode', variant: 'snake_case' };
   }
 
   if (names.has('wraparound') && names.has('practicemode')) {
-    return { wrap: 'wraparound', practice: 'practicemode', variant: 'collapsed' };
+    return { schema: 'public', wrap: 'wraparound', practice: 'practicemode', variant: 'collapsed' };
   }
 
   if (names.has('wrapAround') && names.has('practiceMode')) {
-    return { wrap: '"wrapAround"', practice: '"practiceMode"', variant: 'camelCase' };
+    return { schema: 'public', wrap: '"wrapAround"', practice: '"practiceMode"', variant: 'camelCase' };
   }
 
   if (names.has('wrap') && names.has('practice')) {
-    return { wrap: 'wrap', practice: 'practice', variant: 'short' };
+    return { schema: 'public', wrap: 'wrap', practice: 'practice', variant: 'short' };
   }
 
   return null;
@@ -81,29 +82,43 @@ const resolveScoreColumnsFromNames = (names: Set<string>): ScoreColumns | null =
 const getScoreColumns = async (): Promise<ScoreColumns> => {
   if (cachedColumns) return cachedColumns;
 
-  const columns = await query<{ column_name: string }>`
-    SELECT column_name
+  const columns = await query<{ table_schema: string; column_name: string }>`
+    SELECT table_schema, column_name
     FROM information_schema.columns
-    WHERE table_schema = current_schema()
-      AND table_name = 'scores'
+    WHERE table_name = 'scores'
+      AND table_schema NOT IN ('information_schema', 'pg_catalog')
   `;
 
-  let names = new Set(columns.map((column) => column.column_name));
+  let columnRows = columns;
 
-  if (names.size === 0) {
+  if (columnRows.length === 0) {
     await ensureScoresTable();
-    const refreshed = await query<{ column_name: string }>`
-      SELECT column_name
+    const refreshed = await query<{ table_schema: string; column_name: string }>`
+      SELECT table_schema, column_name
       FROM information_schema.columns
-      WHERE table_schema = current_schema()
-        AND table_name = 'scores'
+      WHERE table_name = 'scores'
+        AND table_schema NOT IN ('information_schema', 'pg_catalog')
     `;
-    names = new Set(refreshed.map((column) => column.column_name));
+    columnRows = refreshed;
   }
+
+  const schemas = Array.from(new Set(columnRows.map((column) => column.table_schema)));
+  const currentSchema = await query<{ schema: string }>`SELECT current_schema() AS schema`;
+  const preferredSchema = [currentSchema[0]?.schema, 'public', ...schemas].find((schema) => schema && schemas.includes(schema));
+
+  if (!preferredSchema) {
+    throw new Error('Unable to resolve scores table schema.');
+  }
+
+  const names = new Set(
+    columnRows
+      .filter((column) => column.table_schema === preferredSchema)
+      .map((column) => column.column_name)
+  );
 
   const resolved = resolveScoreColumnsFromNames(names);
   if (resolved) {
-    cachedColumns = resolved;
+    cachedColumns = { ...resolved, schema: preferredSchema };
     return cachedColumns;
   }
 
@@ -277,7 +292,8 @@ export const getScores = async (limit = 20): Promise<ScoreEntry[]> => {
       error: formatDbError(error)
     });
     if (hasDatabaseConfig()) {
-      throw new Error('Failed to fetch leaderboard scores from database.');
+      const formatted = formatDbError(error);
+      throw new Error(`Failed to fetch leaderboard scores from database: ${formatted.message}`);
     }
     return memoryStore.slice(0, limit);
   }
@@ -290,6 +306,7 @@ export const saveScore = async (entry: ScoreSubmission) => {
     const columns = await getScoreColumns();
     console.info('[leaderboard] Attempting score insert.', {
       targetColumns: {
+        schema: columns.schema,
         wrap: columns.wrap,
         practice: columns.practice,
         variant: columns.variant
@@ -332,7 +349,8 @@ export const saveScore = async (entry: ScoreSubmission) => {
       error: formatDbError(error)
     });
     if (hasDatabaseConfig()) {
-      throw new Error('Failed to persist score in database.');
+      const formatted = formatDbError(error);
+      throw new Error(`Failed to persist score in database: ${formatted.message}`);
     }
     memoryStore.unshift({ ...validated, created_at: new Date().toISOString() });
     return validated;

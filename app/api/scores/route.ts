@@ -110,13 +110,15 @@ export async function POST(req: NextRequest) {
       error: details
     });
 
+    const status = details.message.includes('persist score in database') ? 500 : 400;
+
     return NextResponse.json(
       {
         ok: false,
         error: details.message,
         ...(isDev ? { details } : {})
       },
-      { status: 400 }
+      { status }
     );
   }
 }
