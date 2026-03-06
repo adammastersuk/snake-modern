@@ -38,6 +38,7 @@ export default function Home() {
   const [isMobile, setIsMobile] = useState(false);
   const [mobileFooterHeight, setMobileFooterHeight] = useState(0);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [leaderboardOpen, setLeaderboardOpen] = useState(false);
   const [canvasFocused, setCanvasFocused] = useState(false);
   const [showMobileHint, setShowMobileHint] = useState(false);
   const [hapticsEnabled, setHapticsEnabled] = useState(false);
@@ -77,6 +78,7 @@ export default function Home() {
     setUiState({ ...next, snake: [...next.snake] });
     setReplayFrames([]);
     setReplayFrame(0);
+    setSubmitFeedback({ status: 'idle', message: '' });
   }, [config]);
 
   useEffect(() => reset(), [config, reset]);
@@ -216,7 +218,8 @@ export default function Home() {
 
   const mobileFooterReserve = isMobile ? (mobileFooterHeight || (showDpad ? 196 : 96)) + 12 : 0;
 
-  const mobilePlayMode = isMobile && !drawerOpen && (running || canvasFocused);
+  const anyMobileDrawerOpen = drawerOpen || leaderboardOpen;
+  const mobilePlayMode = isMobile && !anyMobileDrawerOpen && (running || canvasFocused);
 
   useEffect(() => {
     const body = document.body;
@@ -246,13 +249,13 @@ export default function Home() {
 
   useEffect(() => {
     if (!isMobile) return;
-    if (drawerOpen) { pausedBeforeDrawer.current = paused; setPaused(true); return; }
+    if (anyMobileDrawerOpen) { pausedBeforeDrawer.current = paused; setPaused(true); return; }
     setPaused(pausedBeforeDrawer.current);
     // Intentionally only react to drawer/isMobile transitions.
     // Including `paused` here forces the game back to the previous value
     // after every pause toggle and can make Start appear non-functional.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [drawerOpen, isMobile]);
+  }, [anyMobileDrawerOpen, isMobile]);
 
   useEffect(() => {
     let raf = 0;
@@ -356,16 +359,27 @@ export default function Home() {
         <section className="min-w-0">
           <div className="mb-2 flex items-center justify-between gap-2">
             <HUD score={uiState.score} best={best} speed={uiState.speed} length={uiState.snake.length} theme={theme} />
-            <button className={`min-h-11 rounded-xl border px-3 py-2 text-sm font-medium lg:hidden ${surface.buttonGhost}`} onClick={() => setDrawerOpen(true)}>Game Settings</button>
+            <div className="flex items-center gap-2">
+              <button className={`min-h-11 rounded-xl border px-3 py-2 text-sm font-medium lg:hidden ${surface.buttonGhost}`} onClick={() => setLeaderboardOpen(true)}>Leaderboard</button>
+              <button className={`min-h-11 rounded-xl border px-3 py-2 text-sm font-medium lg:hidden ${surface.buttonGhost}`} onClick={() => setDrawerOpen(true)}>Game Settings</button>
+            </div>
           </div>
           {showMobileHint && isMobile && (
             <div className={`mb-2 flex items-start justify-between gap-2 rounded-xl border p-2 text-xs ${surface.softPanel}`}>
-              <p>Tip: Controls are pinned at the bottom. Swipe the board to steer and tap Game Settings to tune your run or manage settings. Leaderboards are now right below the board.</p>
+              <p>Tip: Controls are pinned at the bottom. Swipe the board to steer, use Game Settings to tune your run, and tap Leaderboard to open top runs.</p>
               <button type="button" className={`rounded border px-2 py-1 ${surface.buttonGhost}`} onClick={() => { setShowMobileHint(false); localStorage.setItem('snake-mobile-hint-dismissed', '1'); }}>Dismiss</button>
             </div>
           )}
           <div className="relative mt-2 max-w-full touch-none select-none overscroll-none" onPointerDown={() => setCanvasFocused(true)}>
-            <StartOverlay running={running} alive={uiState.alive} onStart={() => { setRunning(true); setPaused(false); }} theme={theme} />
+            <StartOverlay
+              running={running}
+              alive={uiState.alive}
+              score={uiState.score}
+              submitFeedback={submitFeedback}
+              onStart={() => { setRunning(true); setPaused(false); }}
+              onSubmitScore={submitScore}
+              theme={theme}
+            />
             <div className={`mx-auto w-full max-w-full overflow-hidden rounded-2xl border ${surface.canvasFrame}`}>
               <canvas
                 ref={canvasRef}
@@ -385,7 +399,7 @@ export default function Home() {
         <aside className="hidden space-y-3 lg:sticky lg:top-4 lg:block lg:h-fit">
           <SettingsPanel theme={theme} difficulty={difficulty} wrapAround={wrapAround} practiceMode={practiceMode} showDpad={showDpad} paused={paused} onThemeChange={setTheme} onDifficultyChange={setDifficulty} onWrapChange={setWrapAround} onPracticeModeChange={setPracticeMode} onShowDpadChange={setShowDpad} onPauseToggle={() => setPaused((p) => !p)} onRestart={() => reset()} />
           <ReplayPanel replayJson={replayJson} replayLink={replayLink} replayFrame={replayFrame} replayFrameMax={Math.max(0, replayFrames.length - 1)} onImport={loadReplay} onFrameChange={setReplayFrame} theme={theme} />
-          <LeaderboardPanel scores={scores} onWatchReplay={loadReplay} onSubmitScore={submitScore} submitFeedback={submitFeedback} theme={theme} />
+          <LeaderboardPanel scores={scores} onWatchReplay={loadReplay} theme={theme} />
         </aside>
       </div>
 
@@ -399,12 +413,12 @@ export default function Home() {
         </div>
       </MobileDrawer>
 
+      <MobileDrawer open={leaderboardOpen} title="Leaderboard" onClose={() => setLeaderboardOpen(false)} theme={theme}>
+        <div data-mobile-drawer-scroll="true" className="space-y-3">
+          <LeaderboardPanel scores={scores} onWatchReplay={loadReplay} theme={theme} />
+        </div>
+      </MobileDrawer>
 
-      {isMobile && (
-        <section className="mt-4 space-y-3 lg:hidden">
-          <LeaderboardPanel scores={scores} onWatchReplay={loadReplay} onSubmitScore={submitScore} submitFeedback={submitFeedback} theme={theme} />
-        </section>
-      )}
 
       {isMobile && <div aria-hidden="true" className="md:hidden" style={{ height: `${mobileFooterReserve}px` }} />}
 

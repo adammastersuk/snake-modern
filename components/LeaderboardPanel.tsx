@@ -10,22 +10,14 @@ const difficultyLabel: Record<Difficulty, string> = {
 
 type BoardView = 'global' | 'theme' | 'difficulty';
 
-interface SubmitFeedback {
-  status: 'idle' | 'submitting' | 'success' | 'error';
-  message: string;
-}
 
 export function LeaderboardPanel({
   scores,
   onWatchReplay,
-  onSubmitScore,
-  submitFeedback,
   theme
 }: {
   scores: ScoreEntry[];
   onWatchReplay: (json: string) => void;
-  onSubmitScore: () => void;
-  submitFeedback: SubmitFeedback;
   theme: ThemeMode;
 }) {
   const surface = THEME_SURFACES[theme];
@@ -44,25 +36,10 @@ export function LeaderboardPanel({
 
   return (
     <section className={`space-y-3 rounded-2xl border p-4 ${surface.panel}`}>
-      <div className="flex items-center justify-between gap-2">
-        <div>
-          <h2 className="font-semibold">Global Leaderboard</h2>
-          <p className={`text-xs ${surface.textMuted}`}>Top verified runs with replay-backed validation.</p>
-        </div>
-        <button
-          onClick={onSubmitScore}
-          disabled={submitFeedback.status === 'submitting'}
-          className={`rounded-lg border px-3 py-1 text-sm disabled:cursor-not-allowed disabled:opacity-60 ${surface.buttonPrimary}`}
-        >
-          {submitFeedback.status === 'submitting' ? 'Submitting…' : 'Submit score'}
-        </button>
+      <div>
+        <h2 className="font-semibold">Global Leaderboard</h2>
+        <p className={`text-xs ${surface.textMuted}`}>Top verified runs with replay-backed validation.</p>
       </div>
-
-      {submitFeedback.status !== 'idle' && (
-        <p className={`rounded-lg border px-2 py-1 text-xs ${submitFeedback.status === 'error' ? 'border-red-400/60 text-red-300' : surface.softPanel}`}>
-          {submitFeedback.message}
-        </p>
-      )}
 
       <div className="flex gap-2 text-xs">
         <button type="button" onClick={() => setView('global')} className={`rounded-full border px-3 py-1 ${view === 'global' ? surface.buttonPrimary : surface.buttonGhost}`}>Global</button>
