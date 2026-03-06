@@ -1,24 +1,19 @@
-import { Direction } from '@/lib/game/types';
+import { Direction, ThemeMode } from '@/lib/game/types';
+import { THEME_SURFACES } from '@/lib/theme';
 
 interface MobileControlsProps {
-  onInput: (d: Direction) => void;
+  onInput: (dir: Direction) => void;
   onPauseToggle: () => void;
   onRestart: () => void;
   paused: boolean;
   visible: boolean;
   hapticsEnabled: boolean;
   reduceMotion: boolean;
+  theme: ThemeMode;
 }
 
-export function MobileControls({
-  onInput,
-  onPauseToggle,
-  onRestart,
-  paused,
-  visible,
-  hapticsEnabled,
-  reduceMotion
-}: MobileControlsProps) {
+export function MobileControls({ onInput, onPauseToggle, onRestart, paused, visible, hapticsEnabled, reduceMotion, theme }: MobileControlsProps) {
+  const surface = THEME_SURFACES[theme];
   const vibrate = () => {
     if (!hapticsEnabled || reduceMotion || typeof navigator === 'undefined' || typeof navigator.vibrate !== 'function') return;
     navigator.vibrate(12);
@@ -34,18 +29,17 @@ export function MobileControls({
   if (!visible) {
     return (
       <div className="flex items-center justify-between gap-3">
-        <button type="button" onClick={onPauseToggle} className={`${actionButton} min-w-24 border-white/20 bg-white/10`}>
+        <button type="button" onClick={onPauseToggle} className={`${actionButton} min-w-24 ${surface.buttonGhost}`}>
           {paused ? 'Resume' : 'Pause'}
         </button>
-        <button type="button" onClick={onRestart} className={`${actionButton} min-w-24 border-rose-200/40 bg-rose-500/70`}>
+        <button type="button" onClick={onRestart} className={`${actionButton} min-w-24 ${surface.buttonDanger}`}>
           Restart
         </button>
       </div>
     );
   }
 
-  const padButton =
-    'flex min-h-12 min-w-12 items-center justify-center rounded-2xl border border-white/25 bg-white/15 text-2xl font-bold shadow-lg shadow-black/30 active:translate-y-px active:bg-white/30';
+  const padButton = `flex min-h-12 min-w-12 items-center justify-center rounded-2xl border text-2xl font-bold shadow-lg active:translate-y-px ${surface.softPanel}`;
 
   return (
     <div className="space-y-3" role="group" aria-label="Mobile directional controls">
@@ -58,10 +52,10 @@ export function MobileControls({
         <button type="button" className={padButton} onClick={() => fireInput('right')} aria-label="Move right">→</button>
       </div>
       <div className="grid grid-cols-2 gap-2">
-        <button type="button" onClick={onPauseToggle} className={`${actionButton} border-white/20 bg-indigo-500/70`}>
+        <button type="button" onClick={onPauseToggle} className={`${actionButton} ${surface.buttonPrimary}`}>
           {paused ? 'Resume' : 'Pause'}
         </button>
-        <button type="button" onClick={onRestart} className={`${actionButton} border-rose-200/40 bg-rose-500/70`}>
+        <button type="button" onClick={onRestart} className={`${actionButton} ${surface.buttonDanger}`}>
           Restart
         </button>
       </div>

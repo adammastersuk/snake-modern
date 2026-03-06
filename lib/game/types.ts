@@ -1,5 +1,5 @@
 export type Direction = 'up' | 'down' | 'left' | 'right';
-export type ThemeMode = 'modern' | 'retro';
+export type ThemeMode = 'modern' | 'retro' | 'masters' | 'threed';
 export type Difficulty = 'casual' | 'classic' | 'hardcore';
 
 export interface Point {
