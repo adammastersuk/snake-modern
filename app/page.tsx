@@ -357,12 +357,17 @@ export default function Home() {
       <h1 className="mb-3 text-2xl font-bold sm:text-3xl">{THEME_TITLES[theme]}</h1>
       <div className="grid max-w-full gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
         <section className="min-w-0">
-          <div className="mb-2">
-            <HUD score={uiState.score} best={best} speed={uiState.speed} length={uiState.snake.length} theme={theme} />
-            <div className="mt-2 flex flex-col gap-2 lg:hidden">
-              <button className={`min-h-11 rounded-xl border px-3 py-2 text-sm font-medium ${surface.buttonGhost}`} onClick={() => setDrawerOpen(true)}>Game Settings</button>
-              <button className={`min-h-11 rounded-xl border px-3 py-2 text-sm font-medium ${surface.buttonGhost}`} onClick={() => setLeaderboardOpen(true)}>Leaderboard</button>
+          <div className="mb-2 flex items-start gap-2 lg:hidden">
+            <div className="min-w-0 flex-1">
+              <HUD score={uiState.score} best={best} speed={uiState.speed} length={uiState.snake.length} theme={theme} />
             </div>
+            <div className="w-32 shrink-0 space-y-2">
+              <button className={`min-h-11 w-full rounded-xl border px-3 py-2 text-sm font-medium ${surface.buttonGhost}`} onClick={() => setDrawerOpen(true)}>Game Settings</button>
+              <button className={`min-h-11 w-full rounded-xl border px-3 py-2 text-sm font-medium ${surface.buttonGhost}`} onClick={() => setLeaderboardOpen(true)}>Leaderboard</button>
+            </div>
+          </div>
+          <div className="mb-2 hidden lg:block">
+            <HUD score={uiState.score} best={best} speed={uiState.speed} length={uiState.snake.length} theme={theme} />
           </div>
           {showMobileHint && isMobile && (
             <div className={`mb-2 flex items-start justify-between gap-2 rounded-xl border p-2 text-xs ${surface.softPanel}`}>
