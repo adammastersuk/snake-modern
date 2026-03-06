@@ -1,10 +1,8 @@
-import { sql } from '@vercel/postgres';
+import { query } from '@/lib/db';
 import { simulateReplay } from '@/lib/game/simulation';
 import { Difficulty, ReplayLog, ScoreEntry, ThemeMode } from '@/lib/game/types';
 
 const memoryStore: ScoreEntry[] = [];
-
-export const hasDatabase = () => Boolean(process.env.POSTGRES_URL);
 
 export interface ScoreSubmission {
   name?: string;
@@ -24,19 +22,22 @@ export const validateScore = (payload: ScoreSubmission) => {
 };
 
 export const getScores = async (limit = 20): Promise<ScoreEntry[]> => {
-  if (!hasDatabase()) return memoryStore.slice(0, limit);
-
-  const { rows } = await sql<ScoreEntry>`SELECT id, name, score, length, difficulty, mode, wrapAround, practiceMode, replay, created_at FROM scores ORDER BY score DESC, created_at DESC LIMIT ${limit}`;
-  return rows;
+  try {
+    const rows = await query<ScoreEntry>`SELECT id, name, score, length, difficulty, mode, wrapAround, practiceMode, replay, created_at FROM scores ORDER BY score DESC, created_at DESC LIMIT ${limit}`;
+    return rows;
+  } catch {
+    return memoryStore.slice(0, limit);
+  }
 };
 
 export const saveScore = async (entry: ScoreSubmission) => {
   const validated = validateScore(entry);
-  if (!hasDatabase()) {
-    memoryStore.unshift({ ...validated, created_at: new Date().toISOString() });
-    return;
-  }
 
-  await sql`INSERT INTO scores (name, score, length, difficulty, mode, wrapAround, practiceMode, replay)
-  VALUES (${validated.name ?? null}, ${validated.score}, ${validated.length}, ${validated.difficulty}, ${validated.mode}, ${validated.wrapAround}, ${validated.practiceMode}, ${JSON.stringify(validated.replay)})`;
+  try {
+    await query`INSERT INTO scores (name, score, length, difficulty, mode, wrapAround, practiceMode, replay)
+    VALUES (${validated.name ?? null}, ${validated.score}, ${validated.length}, ${validated.difficulty}, ${validated.mode}, ${validated.wrapAround}, ${validated.practiceMode}, ${JSON.stringify(validated.replay)})`;
+    return;
+  } catch {
+    memoryStore.unshift({ ...validated, created_at: new Date().toISOString() });
+  }
 };

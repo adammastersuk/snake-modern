@@ -40,11 +40,23 @@ Theme switching updates title, panels, controls, overlays, and canvas rendering 
   - `GET /api/scores`
   - `POST /api/scores`
   - replay verification before accepting score
-  - uses `POSTGRES_URL` when available; otherwise in-memory fallback
+  - uses Neon Postgres via Vercel Marketplace env vars when available; otherwise in-memory fallback
 - **PWA install support**:
   - web manifest (`app/manifest.ts`)
   - home screen metadata + icons
   - lightweight service worker shell cache (`public/sw.js`)
+
+## Database
+
+This project uses **Neon Postgres** through the **Vercel Marketplace integration**.
+
+- The app reads the connection string from one of these environment variables:
+  - `POSTGRES_URL`
+  - `DATABASE_URL`
+  - `POSTGRES_PRISMA_URL`
+  - `POSTGRES_URL_NON_POOLING`
+- If no database URL is available (or a query fails), the leaderboard API gracefully falls back to an in-memory store for the running instance.
+- The deprecated `@vercel/postgres` package has been removed in favor of `@neondatabase/serverless`.
 
 ## Controls
 
@@ -97,8 +109,7 @@ This app is ready for Vercel deployment.
 
 1. Push repository.
 2. Import project in Vercel.
-3. Set optional environment variables:
-   - `POSTGRES_URL` (optional, for global leaderboard)
+3. Connect a Neon database via the Vercel Marketplace integration (recommended), or set one of the supported variables above manually.
 4. Deploy.
 
 ## Leaderboard SQL schema
