@@ -203,12 +203,7 @@ export default function Home() {
 
   useEffect(() => {
     if (!isMobile) return;
-    if (drawerOpen) {
-      pausedBeforeDrawer.current = paused;
-      setPaused(true);
-      return;
-    }
-
+    if (drawerOpen) { pausedBeforeDrawer.current = paused; setPaused(true); return; }
     setPaused(pausedBeforeDrawer.current);
     // Intentionally only react to drawer/isMobile transitions.
     // Including `paused` here forces the game back to the previous value
