@@ -257,13 +257,37 @@ export default function Home() {
   };
 
   const submitScore = async () => {
-    if (uiState.alive || uiState.score <= 0) return setToast('Finish a run first');
-    const payload = { score: uiState.score, length: uiState.snake.length, difficulty, mode: theme, wrapAround, practiceMode, replay: replayLog };
-    const res = await fetch('/api/scores', { method: 'POST', body: JSON.stringify(payload) });
-    if (!res.ok) return setToast('Score submit failed');
-    setScores((await (await fetch('/api/scores')).json()).scores ?? []);
-    setToast('Score submitted');
+  const finalState = stateRef.current;
+
+  if (finalState.alive || finalState.score <= 0) {
+    return setToast('Finish a run first');
+  }
+
+  const payload = {
+    score: finalState.score,
+    length: finalState.snake.length,
+    difficulty,
+    mode: theme,
+    wrapAround,
+    practiceMode,
+    replay: replayLog
   };
+
+  const res = await fetch('/api/scores', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+
+  if (!res.ok) {
+    const data = await res.json().catch(() => null);
+    return setToast(data?.error ?? 'Score submit failed');
+  }
+
+  const list = await fetch('/api/scores').then((r) => r.json());
+  setScores(list.scores ?? []);
+  setToast('Score submitted');
+};
 
   return (
     <main className={`mx-auto max-w-7xl overflow-x-hidden px-3 pb-44 pt-3 md:p-4 md:pb-4 ${surface.page}`}>
