@@ -1,109 +1,63 @@
 import { describe, expect, it } from 'vitest';
-import { buildGameConfig } from '@/lib/game/difficulty';
-import { SeededRng } from '@/lib/game/rng';
-import { buildReplay, createInitialState, enqueueDirection, simulateReplay, stepGame } from '@/lib/game/simulation';
-import { Direction, ReplayLog } from '@/lib/game/types';
 import { __testables, validateScore } from '@/lib/leaderboard';
 
-const dirs: Direction[] = ['up', 'down', 'left', 'right'];
-
-const nextDirection = (state: ReturnType<typeof createInitialState>): Direction => {
-  const head = state.snake[0];
-  if (state.food.x > head.x) return 'right';
-  if (state.food.x < head.x) return 'left';
-  if (state.food.y > head.y) return 'down';
-  if (state.food.y < head.y) return 'up';
-  return dirs[state.step % dirs.length];
-};
-
-const buildScoringReplay = (): ReplayLog => {
-  const config = buildGameConfig('classic', false, false);
-
-  for (let seed = 100; seed < 2000; seed += 1) {
-    const state = createInitialState(seed, config);
-    const rng = new SeededRng(state.seed);
-    const queue: Direction[] = [];
-    const events: Array<{ step: number; direction: Direction }> = [];
-
-    while (state.alive && state.step < 220) {
-      const dir = nextDirection(state);
-      const before = queue.length;
-      enqueueDirection(queue, state, dir);
-      if (queue.length > before) {
-        events.push({ step: state.step, direction: dir });
-      }
-      stepGame(state, config, queue, rng);
-
-      if (state.score >= 10 && state.alive) {
-        enqueueDirection(queue, state, 'up');
-        events.push({ step: state.step, direction: 'up' });
-      }
-    }
-
-    if (state.score > 0 && !state.alive) {
-      return buildReplay(seed, config, events, state.step);
-    }
-  }
-
-  throw new Error('Could not generate a scoring replay');
-};
-
-describe('leaderboard replay validation', () => {
+describe('leaderboard submission validation', () => {
   it('detects short wrap/practice score columns', () => {
     const columns = __testables.resolveScoreColumnsFromNames(new Set(['id', 'wrap', 'practice']));
-    expect(columns).toEqual({ schema: 'public', wrap: 'wrap', practice: 'practice', variant: 'short' });
+    expect(columns).toEqual({ wrap: 'wrap', practice: 'practice', variant: 'short' });
   });
 
-  it('rejects replay without final step metadata', () => {
-    const replay = buildScoringReplay();
-    const { finalStep, ...withoutFinalStep } = replay;
+  it('accepts valid final run score payloads without replay', () => {
+    const validated = validateScore({
+      score: 120,
+      length: 14,
+      difficulty: 'classic',
+      mode: 'retro',
+      wrapAround: false,
+      practiceMode: false,
+      name: 'PlayerOne'
+    });
+
+    expect(validated.score).toBe(120);
+    expect(validated.length).toBe(14);
+    expect(validated.name).toBe('PlayerOne');
+    expect(validated.wrapAround).toBe(false);
+    expect(validated.practiceMode).toBe(false);
+  });
+
+  it('rejects invalid score and length', () => {
+    expect(() =>
+      validateScore({
+        score: 0,
+        length: 14,
+        difficulty: 'classic',
+        mode: 'modern',
+        wrapAround: false,
+        practiceMode: false
+      })
+    ).toThrow('Invalid score');
 
     expect(() =>
       validateScore({
         score: 100,
-        length: 10,
+        length: 1,
         difficulty: 'classic',
         mode: 'modern',
         wrapAround: false,
-        practiceMode: false,
-        replay: withoutFinalStep
+        practiceMode: false
       })
-    ).toThrow('Replay is missing final step data');
-    expect(finalStep).toBeGreaterThan(0);
-  });
-
-  it('derives persisted score and length from replay output', () => {
-    const replay = buildScoringReplay();
-    const simulated = simulateReplay(replay);
-
-    const validated = validateScore({
-      score: 99999,
-      length: 999,
-      difficulty: 'classic',
-      mode: 'retro',
-      wrapAround: true,
-      practiceMode: true,
-      replay
-    });
-
-    expect(validated.score).toBe(simulated.score);
-    expect(validated.length).toBe(simulated.snake.length);
-    expect(validated.wrapAround).toBe(replay.config.wrapAround);
-    expect(validated.practiceMode).toBe(replay.config.practiceMode);
+    ).toThrow('Invalid length');
   });
 
   it('rejects names longer than 20 chars', () => {
-    const replay = buildScoringReplay();
-
     expect(() =>
       validateScore({
-        score: 1,
-        length: 2,
+        score: 100,
+        length: 12,
         difficulty: 'classic',
         mode: 'modern',
         wrapAround: false,
         practiceMode: false,
-        replay,
         name: '123456789012345678901'
       })
     ).toThrow('Name must be 20 characters or fewer.');

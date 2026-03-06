@@ -4,7 +4,7 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: 'Snake Modern',
     short_name: 'Snake',
-    description: 'Premium themed deterministic snake with replay sharing.',
+    description: 'Premium themed deterministic snake with reliable leaderboard play.',
     start_url: '/',
     display: 'standalone',
     background_color: '#09090b',

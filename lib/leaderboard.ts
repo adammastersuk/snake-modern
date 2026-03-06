@@ -1,6 +1,5 @@
 import { hasDatabaseConfig, query } from '@/lib/db';
-import { simulateReplay } from '@/lib/game/simulation';
-import { Difficulty, ReplayLog, ScoreEntry, ThemeMode } from '@/lib/game/types';
+import { Difficulty, ScoreEntry, ThemeMode } from '@/lib/game/types';
 
 const memoryStore: ScoreEntry[] = [];
 const MAX_NAME_LENGTH = 20;
@@ -14,7 +13,6 @@ interface ScoreRow {
   mode: ThemeMode;
   wrapAround: boolean;
   practiceMode: boolean;
-  replay: ReplayLog | string;
   created_at: string;
 }
 
@@ -25,6 +23,7 @@ interface ScoreColumns {
   wrap: string;
   practice: string;
   variant: ScoreColumnVariant;
+  hasReplay: boolean;
 }
 
 let cachedColumns: ScoreColumns | null = null;
@@ -40,7 +39,6 @@ const ensureScoresTable = async () => {
       mode TEXT NOT NULL,
       wrap_around BOOLEAN NOT NULL,
       practice_mode BOOLEAN NOT NULL,
-      replay JSONB NOT NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `;
@@ -56,24 +54,23 @@ export interface ScoreSubmission {
   mode: ThemeMode;
   wrapAround: boolean;
   practiceMode: boolean;
-  replay: ReplayLog;
 }
 
-const resolveScoreColumnsFromNames = (names: Set<string>): ScoreColumns | null => {
+const resolveScoreColumnsFromNames = (names: Set<string>): Omit<ScoreColumns, 'schema' | 'hasReplay'> | null => {
   if (names.has('wrap_around') && names.has('practice_mode')) {
-    return { schema: 'public', wrap: 'wrap_around', practice: 'practice_mode', variant: 'snake_case' };
+    return { wrap: 'wrap_around', practice: 'practice_mode', variant: 'snake_case' };
   }
 
   if (names.has('wraparound') && names.has('practicemode')) {
-    return { schema: 'public', wrap: 'wraparound', practice: 'practicemode', variant: 'collapsed' };
+    return { wrap: 'wraparound', practice: 'practicemode', variant: 'collapsed' };
   }
 
   if (names.has('wrapAround') && names.has('practiceMode')) {
-    return { schema: 'public', wrap: '"wrapAround"', practice: '"practiceMode"', variant: 'camelCase' };
+    return { wrap: '"wrapAround"', practice: '"practiceMode"', variant: 'camelCase' };
   }
 
   if (names.has('wrap') && names.has('practice')) {
-    return { schema: 'public', wrap: 'wrap', practice: 'practice', variant: 'short' };
+    return { wrap: 'wrap', practice: 'practice', variant: 'short' };
   }
 
   return null;
@@ -118,20 +115,13 @@ const getScoreColumns = async (): Promise<ScoreColumns> => {
 
   const resolved = resolveScoreColumnsFromNames(names);
   if (resolved) {
-    cachedColumns = { ...resolved, schema: preferredSchema };
+    cachedColumns = { ...resolved, schema: preferredSchema, hasReplay: names.has('replay') };
     return cachedColumns;
   }
 
   throw new Error(
     `Scores table is missing wrap/practice columns. Found columns: ${Array.from(names).sort().join(', ')}`
   );
-};
-
-const parseReplay = (value: ReplayLog | string): ReplayLog => {
-  if (typeof value === 'string') {
-    return JSON.parse(value) as ReplayLog;
-  }
-  return value;
 };
 
 const normalizeRow = (row: ScoreRow): ScoreEntry => ({
@@ -143,7 +133,6 @@ const normalizeRow = (row: ScoreRow): ScoreEntry => ({
   mode: row.mode,
   wrapAround: row.wrapAround,
   practiceMode: row.practiceMode,
-  replay: parseReplay(row.replay),
   created_at: row.created_at
 });
 
@@ -168,55 +157,21 @@ const normalizeName = (value: unknown): string | undefined => {
 };
 
 export const validateScore = (payload: ScoreSubmission): ScoreSubmission => {
-  if (!payload?.replay) {
-    throw new Error('Replay payload is required');
+  if (!Number.isInteger(payload?.score) || payload.score <= 0) {
+    throw new Error('Invalid score');
   }
 
-  if (typeof payload.replay.finalStep !== 'number' || payload.replay.finalStep <= 0) {
-    throw new Error('Replay is missing final step data');
-  }
-
-  const result = simulateReplay(payload.replay);
-
-  if (result.score <= 0) {
-    throw new Error('Replay produced no score');
-  }
-
-  if (result.alive) {
-    throw new Error('Replay must represent a completed run');
+  if (!Number.isInteger(payload.length) || payload.length < 2) {
+    throw new Error('Invalid length');
   }
 
   return {
     ...payload,
     name: normalizeName(payload.name),
     difficulty: asDifficulty(payload.difficulty),
-    mode: asMode(payload.mode),
-    wrapAround: payload.replay.config.wrapAround,
-    practiceMode: payload.replay.config.practiceMode,
-    score: result.score,
-    length: result.snake.length
+    mode: asMode(payload.mode)
   };
 };
-
-const summarizeReplay = (replay: ReplayLog) => ({
-  version: replay.version,
-  finalStep: replay.finalStep,
-  events: replay.events.length,
-  seed: replay.seed,
-  wrapAround: replay.config.wrapAround,
-  practiceMode: replay.config.practiceMode
-});
-
-const summarizeScoreForLogs = (entry: ScoreSubmission) => ({
-  name: entry.name,
-  score: entry.score,
-  length: entry.length,
-  difficulty: entry.difficulty,
-  mode: entry.mode,
-  wrapAround: entry.wrapAround,
-  practiceMode: entry.practiceMode,
-  replay: summarizeReplay(entry.replay)
-});
 
 const formatDbError = (error: unknown) => {
   if (!error || typeof error !== 'object') return { message: String(error) };
@@ -238,7 +193,6 @@ export const getScores = async (limit = 20): Promise<ScoreEntry[]> => {
         SELECT id, name, score, length, difficulty, mode,
           wrap_around AS "wrapAround",
           practice_mode AS "practiceMode",
-          replay,
           created_at
         FROM scores
         ORDER BY score DESC, created_at DESC
@@ -252,7 +206,6 @@ export const getScores = async (limit = 20): Promise<ScoreEntry[]> => {
         SELECT id, name, score, length, difficulty, mode,
           wraparound AS "wrapAround",
           practicemode AS "practiceMode",
-          replay,
           created_at
         FROM scores
         ORDER BY score DESC, created_at DESC
@@ -266,7 +219,6 @@ export const getScores = async (limit = 20): Promise<ScoreEntry[]> => {
         SELECT id, name, score, length, difficulty, mode,
           wrap AS "wrapAround",
           practice AS "practiceMode",
-          replay,
           created_at
         FROM scores
         ORDER BY score DESC, created_at DESC
@@ -279,7 +231,6 @@ export const getScores = async (limit = 20): Promise<ScoreEntry[]> => {
       SELECT id, name, score, length, difficulty, mode,
         "wrapAround" AS "wrapAround",
         "practiceMode" AS "practiceMode",
-        replay,
         created_at
       FROM scores
       ORDER BY score DESC, created_at DESC
@@ -304,48 +255,68 @@ export const saveScore = async (entry: ScoreSubmission) => {
 
   try {
     const columns = await getScoreColumns();
-    console.info('[leaderboard] Attempting score insert.', {
-      targetColumns: {
-        schema: columns.schema,
-        wrap: columns.wrap,
-        practice: columns.practice,
-        variant: columns.variant
-      },
-      payload: summarizeScoreForLogs(validated)
-    });
 
     if (columns.variant === 'snake_case') {
-      await query`
-        INSERT INTO scores (name, score, length, difficulty, mode, wrap_around, practice_mode, replay)
-        VALUES (${validated.name ?? null}, ${validated.score}, ${validated.length}, ${validated.difficulty}, ${validated.mode}, ${validated.wrapAround}, ${validated.practiceMode}, ${JSON.stringify(validated.replay)})
-      `;
+      if (columns.hasReplay) {
+        await query`
+          INSERT INTO scores (name, score, length, difficulty, mode, wrap_around, practice_mode, replay)
+          VALUES (${validated.name ?? null}, ${validated.score}, ${validated.length}, ${validated.difficulty}, ${validated.mode}, ${validated.wrapAround}, ${validated.practiceMode}, '{}'::jsonb)
+        `;
+      } else {
+        await query`
+          INSERT INTO scores (name, score, length, difficulty, mode, wrap_around, practice_mode)
+          VALUES (${validated.name ?? null}, ${validated.score}, ${validated.length}, ${validated.difficulty}, ${validated.mode}, ${validated.wrapAround}, ${validated.practiceMode})
+        `;
+      }
       return validated;
     }
 
     if (columns.variant === 'collapsed') {
-      await query`
-        INSERT INTO scores (name, score, length, difficulty, mode, wraparound, practicemode, replay)
-        VALUES (${validated.name ?? null}, ${validated.score}, ${validated.length}, ${validated.difficulty}, ${validated.mode}, ${validated.wrapAround}, ${validated.practiceMode}, ${JSON.stringify(validated.replay)})
-      `;
+      if (columns.hasReplay) {
+        await query`
+          INSERT INTO scores (name, score, length, difficulty, mode, wraparound, practicemode, replay)
+          VALUES (${validated.name ?? null}, ${validated.score}, ${validated.length}, ${validated.difficulty}, ${validated.mode}, ${validated.wrapAround}, ${validated.practiceMode}, '{}'::jsonb)
+        `;
+      } else {
+        await query`
+          INSERT INTO scores (name, score, length, difficulty, mode, wraparound, practicemode)
+          VALUES (${validated.name ?? null}, ${validated.score}, ${validated.length}, ${validated.difficulty}, ${validated.mode}, ${validated.wrapAround}, ${validated.practiceMode})
+        `;
+      }
       return validated;
     }
 
     if (columns.variant === 'short') {
-      await query`
-        INSERT INTO scores (name, score, length, difficulty, mode, wrap, practice, replay)
-        VALUES (${validated.name ?? null}, ${validated.score}, ${validated.length}, ${validated.difficulty}, ${validated.mode}, ${validated.wrapAround}, ${validated.practiceMode}, ${JSON.stringify(validated.replay)})
-      `;
+      if (columns.hasReplay) {
+        await query`
+          INSERT INTO scores (name, score, length, difficulty, mode, wrap, practice, replay)
+          VALUES (${validated.name ?? null}, ${validated.score}, ${validated.length}, ${validated.difficulty}, ${validated.mode}, ${validated.wrapAround}, ${validated.practiceMode}, '{}'::jsonb)
+        `;
+      } else {
+        await query`
+          INSERT INTO scores (name, score, length, difficulty, mode, wrap, practice)
+          VALUES (${validated.name ?? null}, ${validated.score}, ${validated.length}, ${validated.difficulty}, ${validated.mode}, ${validated.wrapAround}, ${validated.practiceMode})
+        `;
+      }
       return validated;
     }
 
-    await query`
-      INSERT INTO scores (name, score, length, difficulty, mode, "wrapAround", "practiceMode", replay)
-      VALUES (${validated.name ?? null}, ${validated.score}, ${validated.length}, ${validated.difficulty}, ${validated.mode}, ${validated.wrapAround}, ${validated.practiceMode}, ${JSON.stringify(validated.replay)})
-    `;
+    if (columns.hasReplay) {
+      await query`
+        INSERT INTO scores (name, score, length, difficulty, mode, "wrapAround", "practiceMode", replay)
+        VALUES (${validated.name ?? null}, ${validated.score}, ${validated.length}, ${validated.difficulty}, ${validated.mode}, ${validated.wrapAround}, ${validated.practiceMode}, '{}'::jsonb)
+      `;
+    } else {
+      await query`
+        INSERT INTO scores (name, score, length, difficulty, mode, "wrapAround", "practiceMode")
+        VALUES (${validated.name ?? null}, ${validated.score}, ${validated.length}, ${validated.difficulty}, ${validated.mode}, ${validated.wrapAround}, ${validated.practiceMode})
+      `;
+    }
+
     return validated;
   } catch (error) {
     console.error('[leaderboard] Failed to persist score in database.', {
-      payload: summarizeScoreForLogs(validated),
+      payload: validated,
       error: formatDbError(error)
     });
     if (hasDatabaseConfig()) {

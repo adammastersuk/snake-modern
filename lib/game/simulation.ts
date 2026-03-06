@@ -1,5 +1,5 @@
 import { SeededRng } from '@/lib/game/rng';
-import { Direction, GameConfig, GameState, Point, ReplayLog } from '@/lib/game/types';
+import { Direction, GameConfig, GameState, Point } from '@/lib/game/types';
 
 const vectors: Record<Direction, Point> = {
   up: { x: 0, y: -1 },
@@ -90,50 +90,4 @@ export const stepGame = (state: GameState, config: GameConfig, queue: Direction[
   else state.snake.pop();
 
   state.seed = rng.getSeed();
-};
-
-export const buildReplay = (seed: number, config: GameConfig, events: ReplayLog['events'], finalStep: number): ReplayLog => ({
-  version: 1,
-  seed,
-  config: { ...config },
-  events: events.map((event) => ({ ...event })),
-  finalStep
-});
-
-export const simulateReplay = (replay: ReplayLog): GameState => {
-  const state = createInitialState(replay.seed, replay.config);
-  const rng = new SeededRng(state.seed);
-  const queue: Direction[] = [];
-  const eventMap = new Map<number, Direction[]>();
-  replay.events.forEach((evt) => {
-    const arr = eventMap.get(evt.step) ?? [];
-    arr.push(evt.direction);
-    eventMap.set(evt.step, arr);
-  });
-  const max = replay.finalStep ?? Math.max(300, ...replay.events.map((e) => e.step + 20));
-  while (state.step < max && state.alive) {
-    eventMap.get(state.step)?.forEach((dir) => queue.push(dir));
-    stepGame(state, replay.config, queue, rng);
-  }
-  return state;
-};
-
-export const buildReplayFrames = (replay: ReplayLog): GameState[] => {
-  const state = createInitialState(replay.seed, replay.config);
-  const rng = new SeededRng(state.seed);
-  const queue: Direction[] = [];
-  const frames: GameState[] = [{ ...state, snake: [...state.snake] }];
-  const eventMap = new Map<number, Direction[]>();
-  replay.events.forEach((e) => {
-    const arr = eventMap.get(e.step) ?? [];
-    arr.push(e.direction);
-    eventMap.set(e.step, arr);
-  });
-  const max = replay.finalStep ?? Math.max(300, ...replay.events.map((e) => e.step + 20));
-  while (state.step < max && state.alive) {
-    eventMap.get(state.step)?.forEach((dir) => queue.push(dir));
-    stepGame(state, replay.config, queue, rng);
-    frames.push({ ...state, snake: [...state.snake] });
-  }
-  return frames;
 };

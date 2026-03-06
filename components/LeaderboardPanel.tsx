@@ -10,14 +10,11 @@ const difficultyLabel: Record<Difficulty, string> = {
 
 type BoardView = 'global' | 'theme' | 'difficulty';
 
-
 export function LeaderboardPanel({
   scores,
-  onWatchReplay,
   theme
 }: {
   scores: ScoreEntry[];
-  onWatchReplay: (json: string) => void;
   theme: ThemeMode;
 }) {
   const surface = THEME_SURFACES[theme];
@@ -38,7 +35,7 @@ export function LeaderboardPanel({
     <section className={`space-y-3 rounded-2xl border p-4 ${surface.panel}`}>
       <div>
         <h2 className="font-semibold">Global Leaderboard</h2>
-        <p className={`text-xs ${surface.textMuted}`}>Top verified runs with replay-backed validation.</p>
+        <p className={`text-xs ${surface.textMuted}`}>Top runs ranked by final score.</p>
       </div>
 
       <div className="flex gap-2 text-xs">
@@ -67,7 +64,6 @@ export function LeaderboardPanel({
           <div key={`${score.created_at}-${index}`} className={`rounded-xl border p-2 ${surface.softPanel}`}>
             <div className="flex items-center justify-between gap-2">
               <span className="font-medium">#{index + 1} · {score.score.toLocaleString()}</span>
-              <button className={`text-xs underline ${surface.textMuted}`} onClick={() => onWatchReplay(JSON.stringify(score.replay))}>Watch replay</button>
             </div>
             <p className={`mt-1 text-xs ${surface.textMuted}`}>
               {score.name ? `${score.name} · ` : ''}Len {score.length} · {difficultyLabel[score.difficulty]} · {THEME_TITLES[score.mode]} · {score.practiceMode ? 'Practice' : 'Standard'}
