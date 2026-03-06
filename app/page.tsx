@@ -205,7 +205,11 @@ export default function Home() {
     if (!isMobile) return;
     if (drawerOpen) { pausedBeforeDrawer.current = paused; setPaused(true); return; }
     setPaused(pausedBeforeDrawer.current);
-  }, [drawerOpen, isMobile, paused]);
+    // Intentionally only react to drawer/isMobile transitions.
+    // Including `paused` here forces the game back to the previous value
+    // after every pause toggle and can make Start appear non-functional.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [drawerOpen, isMobile]);
 
   useEffect(() => {
     let raf = 0;
