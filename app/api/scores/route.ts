@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getScores, saveScore, ScoreSubmission } from '@/lib/leaderboard';
+import { getDatabaseConfigStatus } from '@/lib/db';
 
 export const runtime = 'nodejs';
 
@@ -34,6 +35,12 @@ const formatError = (error: unknown) => {
 };
 
 export async function GET() {
+  const dbStatus = getDatabaseConfigStatus();
+
+  if (!dbStatus.configured) {
+    console.warn('[scores][GET] Database env vars missing; using in-memory leaderboard fallback.', dbStatus);
+  }
+
   try {
     const scores = await getScores(50);
     return NextResponse.json({ scores });
@@ -52,7 +59,12 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  const dbStatus = getDatabaseConfigStatus();
   let payload: unknown = null;
+
+  if (!dbStatus.configured) {
+    console.warn('[scores][POST] Database env vars missing; score writes will use in-memory fallback.', dbStatus);
+  }
 
   try {
     payload = await req.json();
@@ -79,6 +91,7 @@ export async function POST(req: NextRequest) {
     const details = formatError(error);
     console.error('[scores][POST] Failed to save score.', {
       payload: summarizePayload(payload),
+      dbStatus,
       error: details
     });
 

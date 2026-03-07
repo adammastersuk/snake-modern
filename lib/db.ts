@@ -2,27 +2,42 @@ import { neon } from '@neondatabase/serverless';
 
 type Primitive = string | number | boolean | null | undefined;
 
-const getDatabaseUrl = () => {
-  const connectionString =
-    process.env.POSTGRES_URL ??
-    process.env.DATABASE_URL ??
-    process.env.POSTGRES_PRISMA_URL ??
-    process.env.POSTGRES_URL_NON_POOLING;
+const DATABASE_ENV_KEYS = [
+  'POSTGRES_URL',
+  'DATABASE_URL',
+  'POSTGRES_PRISMA_URL',
+  'POSTGRES_URL_NON_POOLING'
+] as const;
 
-  if (!connectionString) {
-    throw new Error('Database connection string is missing. Set POSTGRES_URL or DATABASE_URL.');
+const resolveDatabaseUrl = () => {
+  for (const key of DATABASE_ENV_KEYS) {
+    const value = process.env[key];
+    if (value) {
+      return { key, value };
+    }
   }
 
-  return connectionString;
+  return null;
 };
 
-export const hasDatabaseConfig = () => {
-  return Boolean(
-    process.env.POSTGRES_URL ??
-    process.env.DATABASE_URL ??
-    process.env.POSTGRES_PRISMA_URL ??
-    process.env.POSTGRES_URL_NON_POOLING
-  );
+const getDatabaseUrl = () => {
+  const resolved = resolveDatabaseUrl();
+
+  if (!resolved) {
+    throw new Error(
+      `Database connection string is missing. Set one of: ${DATABASE_ENV_KEYS.join(', ')}.`
+    );
+  }
+
+  return resolved.value;
+};
+
+export const hasDatabaseConfig = () => Boolean(resolveDatabaseUrl());
+
+export const getDatabaseConfigStatus = () => {
+  const resolved = resolveDatabaseUrl();
+  if (resolved) return { configured: true as const, source: resolved.key };
+  return { configured: false as const, expected: DATABASE_ENV_KEYS };
 };
 
 const neonSql = () => neon(getDatabaseUrl());
