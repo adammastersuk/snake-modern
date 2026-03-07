@@ -59,6 +59,7 @@ export default function Home() {
   const pausedBeforeDrawer = useRef(true);
   const reduceMotion = usePrefersReducedMotion();
   const mobileFooterRef = useRef<HTMLElement>(null);
+  const boardRegionRef = useRef<HTMLDivElement>(null);
 
   const config = useMemo(() => buildGameConfig(difficulty, practiceMode, wrapAround), [difficulty, practiceMode, wrapAround]);
   const [uiState, setUiState] = useState(() => createInitialState(createSeed(), config));
@@ -201,10 +202,18 @@ export default function Home() {
   useEffect(() => {
     const onResize = () => {
       const dpr = window.devicePixelRatio || 1;
-      const widthLimit = Math.max(320, window.innerWidth) - (isMobile ? 20 : 32);
+      const viewportWidth = Math.floor(window.visualViewport?.width ?? window.innerWidth);
+      const viewportHeight = Math.floor(window.visualViewport?.height ?? window.innerHeight);
+      const widthLimit = Math.max(320, viewportWidth) - (isMobile ? 20 : 32);
       const fallbackFooter = showDpad ? 196 : 96;
       const measuredFooter = mobileFooterHeight > 0 ? mobileFooterHeight : fallbackFooter;
-      const heightLimit = isMobile ? Math.max(180, window.innerHeight - (measuredFooter + 132)) : Math.max(360, window.innerHeight - 260);
+      const boardTop = boardRegionRef.current?.getBoundingClientRect().top ?? 0;
+      const footerTop = mobileFooterRef.current?.getBoundingClientRect().top ?? (viewportHeight - measuredFooter);
+      const measuredBoardSpace = Math.floor(footerTop - boardTop - 12);
+      const mobileHeightLimit = Number.isFinite(measuredBoardSpace) && measuredBoardSpace > 0
+        ? measuredBoardSpace
+        : viewportHeight - (measuredFooter + 132);
+      const heightLimit = isMobile ? Math.max(180, mobileHeightLimit) : Math.max(360, viewportHeight - 260);
       const tileByWidth = Math.floor(widthLimit / config.width);
       const tileByHeight = Math.floor(heightLimit / config.height);
       const nextTile = Math.max(12, Math.min(DEFAULT_TILE, tileByWidth, tileByHeight));
@@ -213,7 +222,12 @@ export default function Home() {
     onResize();
     window.addEventListener('resize', onResize);
     window.addEventListener('orientationchange', onResize);
-    return () => { window.removeEventListener('resize', onResize); window.removeEventListener('orientationchange', onResize); };
+    window.visualViewport?.addEventListener('resize', onResize);
+    return () => {
+      window.removeEventListener('resize', onResize);
+      window.removeEventListener('orientationchange', onResize);
+      window.visualViewport?.removeEventListener('resize', onResize);
+    };
   }, [config.height, config.width, isMobile, mobileFooterHeight, showDpad]);
 
   useEffect(() => {
@@ -432,7 +446,7 @@ export default function Home() {
               <button type="button" className={`rounded border px-2 py-1 ${surface.buttonGhost}`} onClick={() => { setShowMobileHint(false); localStorage.setItem('snake-mobile-hint-dismissed', '1'); }}>Dismiss</button>
             </div>
           )}
-          <div className="relative mt-2 max-w-full touch-none select-none overscroll-none" onPointerDown={() => setCanvasFocused(true)}>
+          <div ref={boardRegionRef} className="relative mt-2 max-w-full touch-none select-none overscroll-none" onPointerDown={() => setCanvasFocused(true)}>
             <StartOverlay
               running={running}
               alive={uiState.alive}
