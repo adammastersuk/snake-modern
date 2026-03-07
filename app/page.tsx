@@ -17,6 +17,7 @@ import { isTypingTarget } from '@/lib/game/keyboard';
 import { createInitialState, enqueueDirection, stepGame } from '@/lib/game/simulation';
 import { Difficulty, Direction, ScoreEntry, ThemeMode } from '@/lib/game/types';
 import { THEME_SURFACES, THEME_TITLES } from '@/lib/theme';
+import { LEADERBOARD_SCORES_API_PATH } from '@/lib/api-paths';
 
 const DEFAULT_TILE = 22;
 const MAX_PLAYER_NAME_LENGTH = 20;
@@ -69,8 +70,17 @@ export default function Home() {
 
 
   const refreshScores = useCallback(async () => {
-    const list = await fetch('/api/scores').then((r) => r.json());
-    setScores(list.scores ?? []);
+    const response = await fetch(LEADERBOARD_SCORES_API_PATH, {
+      headers: { Accept: 'application/json' }
+    });
+
+    const list = await response.json().catch(() => null);
+    if (!response.ok) {
+      const message = list?.error ?? `Failed to load leaderboard (${response.status})`;
+      throw new Error(message);
+    }
+
+    setScores(Array.isArray(list?.scores) ? list.scores : []);
   }, []);
 
   const restartGame = useCallback((seed = createSeed()) => {
@@ -98,7 +108,12 @@ export default function Home() {
 
   useEffect(() => {
     setBest(Number(localStorage.getItem('snake-best') ?? '0'));
-    refreshScores().catch(() => undefined);
+    refreshScores().catch((error) => {
+      const message = error instanceof Error ? error.message : 'Failed to load leaderboard scores.';
+      console.error('[leaderboard] Initial leaderboard refresh failed.', { message });
+      setSubmitFeedback({ status: 'error', message });
+      setToast('Leaderboard unavailable');
+    });
     setShowMobileHint(localStorage.getItem('snake-mobile-hint-dismissed') !== '1');
     setHapticsEnabled(localStorage.getItem('snake-haptics') === '1');
   }, [refreshScores]);
@@ -339,7 +354,7 @@ export default function Home() {
       practiceMode: candidate.practiceMode
     };
 
-    const res = await fetch('/api/scores', {
+    const res = await fetch(LEADERBOARD_SCORES_API_PATH, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -347,7 +362,8 @@ export default function Home() {
 
     if (!res.ok) {
       const data = await res.json().catch(() => null);
-      const message = data?.error ?? 'Score submission failed';
+      const message = data?.error ?? `Score submission failed (${res.status})`;
+      console.error('[leaderboard] Score submission failed.', { status: res.status, message, payload });
       setSubmitFeedback({ status: 'error', message });
       setToast('Score submit failed');
       return;
@@ -357,7 +373,10 @@ export default function Home() {
     if (Array.isArray(data.scores)) {
       setScores(data.scores);
     } else {
-      await refreshScores();
+      await refreshScores().catch((error) => {
+        const message = error instanceof Error ? error.message : 'Failed to refresh leaderboard after submission.';
+        console.error('[leaderboard] Failed to refresh leaderboard after submission.', { message });
+      });
     }
 
     let persistedScore = candidate.score;
@@ -367,7 +386,10 @@ export default function Home() {
       const message = error instanceof Error ? error.message : 'Submitted score did not match final run score.';
       setSubmitFeedback({ status: 'error', message });
       setToast('Score mismatch');
-      await refreshScores();
+      await refreshScores().catch((error) => {
+        const message = error instanceof Error ? error.message : 'Failed to refresh leaderboard after submission mismatch.';
+        console.error('[leaderboard] Failed to refresh leaderboard after mismatch.', { message });
+      });
       return;
     }
 
