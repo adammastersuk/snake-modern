@@ -381,7 +381,15 @@ export default function Home() {
 
   return (
     <main className={`mx-auto max-w-7xl overflow-x-hidden px-3 pt-3 md:p-4 ${surface.page}`}>
-      <h1 className="mb-3 text-2xl font-bold sm:text-3xl">{THEME_TITLES[theme]}</h1>
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <h1 className="min-w-0 text-2xl font-bold sm:text-3xl">{THEME_TITLES[theme]}</h1>
+        <a
+          href="https://builds.adammasters.co.uk"
+          className={`shrink-0 rounded-lg border px-3 py-1.5 text-xs font-medium sm:text-sm ${surface.buttonGhost}`}
+        >
+          Back to Builds
+        </a>
+      </div>
       <div className="grid max-w-full gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
         <section className="min-w-0">
           <div className="mb-2 flex items-start gap-2 lg:hidden">
