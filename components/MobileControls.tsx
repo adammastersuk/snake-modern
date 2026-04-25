@@ -24,12 +24,12 @@ export function MobileControls({ onInput, onPauseToggle, onRestart, paused, visi
     onInput(dir);
   };
 
-  const actionButton = 'min-h-11 rounded-xl border px-4 py-2 text-sm font-semibold';
+  const actionButton = 'min-h-11 rounded-xl border px-4 py-2 text-sm font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2';
 
   if (!visible) {
     return (
       <div className="flex items-center justify-between gap-3">
-        <button type="button" onClick={onPauseToggle} className={`${actionButton} min-w-24 ${surface.buttonGhost}`}>
+        <button type="button" onClick={onPauseToggle} aria-pressed={!paused} className={`${actionButton} min-w-24 ${surface.buttonGhost}`}>
           {paused ? 'Resume' : 'Pause'}
         </button>
         <button type="button" onClick={onRestart} className={`${actionButton} min-w-24 ${surface.buttonDanger}`}>
@@ -39,20 +39,20 @@ export function MobileControls({ onInput, onPauseToggle, onRestart, paused, visi
     );
   }
 
-  const padButton = `flex min-h-12 min-w-12 items-center justify-center rounded-2xl border text-2xl font-bold shadow-lg active:translate-y-px ${surface.softPanel}`;
+  const padButton = `flex min-h-12 min-w-12 items-center justify-center rounded-2xl border text-2xl font-bold shadow-lg active:translate-y-px focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ${surface.softPanel}`;
 
   return (
     <div className="space-y-3" role="group" aria-label="Mobile directional controls">
       <div className="mx-auto grid w-fit grid-cols-3 gap-2">
         <div />
-        <button type="button" className={padButton} onClick={() => fireInput('up')} aria-label="Move up">↑</button>
+        <button type="button" className={padButton} onClick={() => fireInput('up')} aria-label="Move up" title="Move up">↑</button>
         <div />
-        <button type="button" className={padButton} onClick={() => fireInput('left')} aria-label="Move left">←</button>
-        <button type="button" className={padButton} onClick={() => fireInput('down')} aria-label="Move down">↓</button>
-        <button type="button" className={padButton} onClick={() => fireInput('right')} aria-label="Move right">→</button>
+        <button type="button" className={padButton} onClick={() => fireInput('left')} aria-label="Move left" title="Move left">←</button>
+        <button type="button" className={padButton} onClick={() => fireInput('down')} aria-label="Move down" title="Move down">↓</button>
+        <button type="button" className={padButton} onClick={() => fireInput('right')} aria-label="Move right" title="Move right">→</button>
       </div>
       <div className="grid grid-cols-2 gap-2">
-        <button type="button" onClick={onPauseToggle} className={`${actionButton} ${surface.buttonPrimary}`}>
+        <button type="button" onClick={onPauseToggle} aria-pressed={!paused} className={`${actionButton} ${surface.buttonPrimary}`}>
           {paused ? 'Resume' : 'Pause'}
         </button>
         <button type="button" onClick={onRestart} className={`${actionButton} ${surface.buttonDanger}`}>

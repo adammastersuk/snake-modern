@@ -57,6 +57,7 @@ export default function Home() {
   const [finalRun, setFinalRun] = useState<FinalRunSnapshot | null>(null);
   const [submissionResult, setSubmissionResult] = useState<SubmissionResult | null>(null);
   const pausedBeforeDrawer = useRef(true);
+  const endGameRef = useRef<() => void>(() => {});
   const reduceMotion = usePrefersReducedMotion();
   const mobileFooterRef = useRef<HTMLElement>(null);
   const boardRegionRef = useRef<HTMLDivElement>(null);
@@ -67,6 +68,11 @@ export default function Home() {
   const stateRef = useRef(uiState);
   const queueRef = useRef<Direction[]>([]);
   const rngRef = useRef(new SeededRng(uiState.seed));
+  const configRef = useRef(config);
+  const pausedRef = useRef(paused);
+  const runningRef = useRef(running);
+  const themeRef = useRef(theme);
+  const canvasMetricsRef = useRef(canvasMetrics);
   const surface = THEME_SURFACES[theme];
 
 
@@ -99,6 +105,11 @@ export default function Home() {
   }, [config]);
 
   useEffect(() => restartGame(), [config, restartGame]);
+  useEffect(() => { configRef.current = config; }, [config]);
+  useEffect(() => { pausedRef.current = paused; }, [paused]);
+  useEffect(() => { runningRef.current = running; }, [running]);
+  useEffect(() => { themeRef.current = theme; }, [theme]);
+  useEffect(() => { canvasMetricsRef.current = canvasMetrics; }, [canvasMetrics]);
   useEffect(() => {
     const media = window.matchMedia('(max-width: 1023px)');
     const sync = () => setIsMobile(media.matches);
@@ -126,6 +137,34 @@ export default function Home() {
   }, [toast]);
 
   useEffect(() => localStorage.setItem('snake-haptics', hapticsEnabled ? '1' : '0'), [hapticsEnabled]);
+
+  const startOrResume = useCallback(() => {
+    if (!stateRef.current.alive) {
+      restartGame();
+      setRunning(true);
+      setPaused(false);
+      return;
+    }
+
+    if (!runningRef.current) {
+      setRunning(true);
+      setPaused(false);
+      return;
+    }
+
+    setPaused(false);
+  }, [restartGame]);
+
+  const togglePause = useCallback(() => {
+    if (!stateRef.current.alive) return;
+    if (!runningRef.current) {
+      setRunning(true);
+      setPaused(false);
+      return;
+    }
+    setPaused((value) => !value);
+  }, []);
+
   const input = useCallback((dir: Direction) => {
     enqueueDirection(queueRef.current, stateRef.current, dir);
   }, []);
@@ -151,14 +190,13 @@ export default function Home() {
       }
       if (e.key === ' ') {
         e.preventDefault();
-        setRunning(true);
-        setPaused((p) => !p);
+        togglePause();
       }
       if (e.key.toLowerCase() === 'r') restartGame();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [input, restartGame]);
+  }, [input, restartGame, togglePause]);
 
   const endGame = useCallback(() => {
     const finalState = stateRef.current;
@@ -173,6 +211,9 @@ export default function Home() {
     setPaused(true);
     setRunning(false);
   }, [difficulty, practiceMode, theme, wrapAround]);
+  useEffect(() => {
+    endGameRef.current = endGame;
+  }, [endGame]);
 
   useEffect(() => {
     const target = canvasRef.current;
@@ -260,6 +301,9 @@ export default function Home() {
   }, [isMobile, showDpad]);
 
   const mobileFooterReserve = isMobile ? (mobileFooterHeight || (showDpad ? 196 : 96)) + 12 : 0;
+  const foodsToSpeedUp = uiState.speed >= config.maxSpeed
+    ? null
+    : Math.max(0, config.speedIncreaseEveryFood - (uiState.foodEaten % config.speedIncreaseEveryFood));
 
   const anyMobileDrawerOpen = drawerOpen || leaderboardOpen;
   const mobilePlayMode = isMobile && !anyMobileDrawerOpen && (running || canvasFocused);
@@ -310,21 +354,22 @@ export default function Home() {
       accumulator += dt;
       const frameMs = 1000 / stateRef.current.speed;
       while (accumulator >= frameMs) {
-          if (!paused && running) {
-            stepGame(stateRef.current, config, queueRef.current, rngRef.current);
+          if (!pausedRef.current && runningRef.current) {
+            stepGame(stateRef.current, configRef.current, queueRef.current, rngRef.current);
             if (!stateRef.current.alive) {
-              endGame();
+              endGameRef.current();
             }
         }
         accumulator -= frameMs;
       }
-      draw(canvasRef.current, stateRef.current, theme, canvasMetrics.tile * canvasMetrics.dpr);
+      const frame = canvasMetricsRef.current;
+      draw(canvasRef.current, stateRef.current, themeRef.current, frame.tile * frame.dpr);
       setUiState({ ...stateRef.current, snake: [...stateRef.current.snake] });
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [config, paused, running, theme, canvasMetrics, endGame]);
+  }, []);
 
   useEffect(() => {
     if (!uiState.alive && uiState.score > best) {
@@ -430,7 +475,17 @@ export default function Home() {
         <section className="min-w-0">
           <div className="mb-2 flex items-start gap-2 lg:hidden">
             <div className="min-w-0 flex-1">
-              <HUD score={uiState.score} best={best} speed={uiState.speed} length={uiState.snake.length} theme={theme} />
+              <HUD
+                score={uiState.score}
+                best={best}
+                speed={uiState.speed}
+                length={uiState.snake.length}
+                foodsToSpeedUp={foodsToSpeedUp}
+                running={running}
+                paused={paused}
+                alive={uiState.alive}
+                theme={theme}
+              />
             </div>
             <div className="w-32 shrink-0 space-y-2">
               <button className={`min-h-11 w-full rounded-xl border px-3 py-2 text-sm font-medium ${surface.buttonGhost}`} onClick={() => setDrawerOpen(true)}>Game Settings</button>
@@ -438,7 +493,17 @@ export default function Home() {
             </div>
           </div>
           <div className="mb-2 hidden lg:block">
-            <HUD score={uiState.score} best={best} speed={uiState.speed} length={uiState.snake.length} theme={theme} />
+            <HUD
+              score={uiState.score}
+              best={best}
+              speed={uiState.speed}
+              length={uiState.snake.length}
+              foodsToSpeedUp={foodsToSpeedUp}
+              running={running}
+              paused={paused}
+              alive={uiState.alive}
+              theme={theme}
+            />
           </div>
           {showMobileHint && isMobile && (
             <div className={`mb-2 flex items-start justify-between gap-2 rounded-xl border p-2 text-xs ${surface.softPanel}`}>
@@ -450,6 +515,7 @@ export default function Home() {
             <StartOverlay
               running={running}
               alive={uiState.alive}
+              paused={paused}
               score={finalRun?.score ?? uiState.score}
               submitFeedback={submitFeedback}
               playerName={playerName}
@@ -461,16 +527,7 @@ export default function Home() {
                   setSubmitFeedback({ status: 'idle', message: '' });
                 }
               }}
-              onStart={() => {
-                if (uiState.alive) {
-                  setRunning(true);
-                  setPaused(false);
-                  return;
-                }
-                restartGame();
-                setRunning(true);
-                setPaused(false);
-              }}
+              onStart={startOrResume}
               onSubmitScore={submitScore}
               theme={theme}
             />
@@ -491,14 +548,14 @@ export default function Home() {
           <div className="mt-2 hidden md:block"><KeyHints theme={theme} /></div>
         </section>
         <aside className="hidden space-y-3 lg:sticky lg:top-4 lg:block lg:h-fit">
-          <SettingsPanel theme={theme} difficulty={difficulty} wrapAround={wrapAround} practiceMode={practiceMode} showDpad={showDpad} paused={paused} onThemeChange={setTheme} onDifficultyChange={setDifficulty} onWrapChange={setWrapAround} onPracticeModeChange={setPracticeMode} onShowDpadChange={setShowDpad} onPauseToggle={() => setPaused((p) => !p)} onRestart={() => restartGame()} />
+          <SettingsPanel theme={theme} difficulty={difficulty} wrapAround={wrapAround} practiceMode={practiceMode} showDpad={showDpad} paused={paused} onThemeChange={setTheme} onDifficultyChange={setDifficulty} onWrapChange={setWrapAround} onPracticeModeChange={setPracticeMode} onShowDpadChange={setShowDpad} onPauseToggle={togglePause} onRestart={() => restartGame()} />
           <LeaderboardPanel scores={scores} theme={theme} />
         </aside>
       </div>
 
       <MobileDrawer open={drawerOpen} title="Game Settings" onClose={() => setDrawerOpen(false)} theme={theme}>
         <div data-mobile-drawer-scroll="true" className="space-y-3">
-          <SettingsPanel theme={theme} difficulty={difficulty} wrapAround={wrapAround} practiceMode={practiceMode} showDpad={showDpad} paused={paused} onThemeChange={setTheme} onDifficultyChange={setDifficulty} onWrapChange={setWrapAround} onPracticeModeChange={setPracticeMode} onShowDpadChange={setShowDpad} onPauseToggle={() => setPaused((p) => !p)} onRestart={() => restartGame()} />
+          <SettingsPanel theme={theme} difficulty={difficulty} wrapAround={wrapAround} practiceMode={practiceMode} showDpad={showDpad} paused={paused} onThemeChange={setTheme} onDifficultyChange={setDifficulty} onWrapChange={setWrapAround} onPracticeModeChange={setPracticeMode} onShowDpadChange={setShowDpad} onPauseToggle={togglePause} onRestart={() => restartGame()} />
           <div className={`rounded-2xl border p-3 ${surface.panel}`}>
             <label className="flex items-center justify-between gap-2 text-sm"><span>Haptic feedback</span><input type="checkbox" checked={hapticsEnabled} onChange={(e) => setHapticsEnabled(e.target.checked)} aria-label="Toggle haptic feedback" /></label>
           </div>
@@ -518,7 +575,7 @@ export default function Home() {
 
       <footer ref={mobileFooterRef} className={`fixed inset-x-0 bottom-0 z-50 w-full max-w-full border-t px-3 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2 md:hidden ${surface.footer}`}>
         <div className="mx-auto w-full max-w-md">
-          <MobileControls onInput={input} onPauseToggle={() => { setRunning(true); setPaused((p) => !p); }} onRestart={() => restartGame()} paused={paused} visible={showDpad} hapticsEnabled={hapticsEnabled} reduceMotion={reduceMotion} theme={theme} />
+          <MobileControls onInput={input} onPauseToggle={togglePause} onRestart={() => restartGame()} paused={paused} visible={showDpad} hapticsEnabled={hapticsEnabled} reduceMotion={reduceMotion} theme={theme} />
         </div>
       </footer>
     </main>

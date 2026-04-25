@@ -21,6 +21,18 @@ body {
   overscroll-behavior: none;
 }
 
+:focus-visible {
+  outline: 2px solid rgba(56, 189, 248, 0.95);
+  outline-offset: 2px;
+}
+
+button,
+a,
+input,
+select {
+  transition: transform 120ms ease, filter 120ms ease, background-color 120ms ease, border-color 120ms ease;
+}
+
 .game-touch-area {
   touch-action: none;
   -webkit-user-select: none;
