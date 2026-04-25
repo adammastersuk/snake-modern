@@ -64,10 +64,10 @@ export function SettingsPanel(p: Props) {
       <Toggle label="On-screen D-pad" checked={p.showDpad} onChange={p.onShowDpadChange} mutedClass={surface.textMuted} />
 
       <div className="grid grid-cols-2 gap-2">
-        <button onClick={p.onPauseToggle} className={`rounded-lg border px-3 py-2 text-sm font-semibold ${surface.buttonPrimary}`}>
+        <button type="button" onClick={p.onPauseToggle} aria-pressed={!p.paused} className={`rounded-lg border px-3 py-2 text-sm font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ${surface.buttonPrimary}`}>
           {p.paused ? 'Resume' : 'Pause'}
         </button>
-        <button onClick={p.onRestart} className={`rounded-lg border px-3 py-2 text-sm font-semibold ${surface.buttonDanger}`}>
+        <button type="button" onClick={p.onRestart} className={`rounded-lg border px-3 py-2 text-sm font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ${surface.buttonDanger}`}>
           Restart
         </button>
       </div>
